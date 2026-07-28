@@ -1,0 +1,104 @@
+
+========================================================================================================
+MTF ALIGNMENT TEST (base=240m) | edge = cond_mean - baseline | reversal=+ | n=how many of 60/120/240m aligned
+========================================================================================================
+
+### BANKNIFTY px_ema200   (baseline signed_fwd = -0.08%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      359  +0.35%   39% |      246  +0.63%   58% |      393  +0.99%*  59%  UP
+   85 |      344  +0.59%   44% |      167  +1.15%*  60% |      303  +0.93%*  56%  UP
+   90 |      258  +0.37%   46% |      114  +2.37%*  60% |      190  +0.83%*  59%  UP
+
+### BANKNIFTY ema_spread  (baseline signed_fwd = -0.04%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      376  +0.25%   39% |      284  +1.00%*  58% |      281  +1.51%*  58%  UP
+   85 |      376  +0.73%*  45% |      192  +1.08%*  56% |      218  +1.52%*  58%  UP
+   90 |      332  +1.04%*  48% |      129  +1.96%*  63% |      155  +1.64%*  62%  UP
+
+### ICICIBANK px_ema200   (baseline signed_fwd = -0.17%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      255  +1.22%*  56% |      253  +1.50%*  59% |      434  +0.99%*  53%  flat/down
+   85 |      255  +1.14%*  56% |      208  +2.04%*  60% |      321  +1.07%*  53%  flat/down
+   90 |      243  +1.69%*  56% |      128  +1.91%*  58% |      220  +1.12%*  54%  flat/down
+
+### ICICIBANK ema_spread  (baseline signed_fwd = -0.13%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      348  +0.55%*  56% |      255  +1.56%*  57% |      328  +1.71%*  59%  UP
+   85 |      338  +0.92%*  51% |      189  +2.02%*  64% |      245  +1.61%*  60%  UP
+   90 |      297  +1.45%*  53% |      129  +1.90%*  65% |      163  +1.70%*  62%  UP
+
+### RELIANCE  px_ema200   (baseline signed_fwd = +0.28%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      319  +0.01%   48% |      286  -0.36%   49% |      547  +0.49%*  55%  UP
+   85 |      321  +0.35%   51% |      200  -0.15%   54% |      374  +0.84%*  55%  UP
+   90 |      271  +0.24%   57% |      157  -0.24%   51% |      233  +1.12%*  54%  UP
+
+### RELIANCE  ema_spread  (baseline signed_fwd = +0.29%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      443  -0.15%   46% |      306  +0.01%   51% |      439  +0.34%   53%  UP
+   85 |      423  +0.12%   49% |      211  -0.49%   46% |      310  +0.27%   53%  UP
+   90 |      343  +0.71%*  55% |      172  -0.78%   49% |      175  +0.68%*  55%  flat/down
+
+### HDFCBANK  px_ema200   (baseline signed_fwd = +0.29%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      383  -0.14%   55% |      287  +0.24%   55% |      531  +0.41%*  46%  UP
+   85 |      371  -0.26%   52% |      220  +0.23%   54% |      389  +0.46%   42%  UP
+   90 |      339  -0.25%   49% |      156  +0.76%*  58% |      234  +0.64%*  37%  UP
+
+### HDFCBANK  ema_spread  (baseline signed_fwd = +0.25%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      436  +0.04%   56% |      343  +0.13%   53% |      455  +0.75%*  49%  UP
+   85 |      419  -0.09%   54% |      250  +0.62%   59% |      307  +0.75%*  44%  UP
+   90 |      349  -0.05%   53% |      189  +0.71%*  57% |      205  +0.76%*  42%  UP
+
+### TCS       px_ema200   (baseline signed_fwd = -0.40%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      465  +0.07%   52% |      280  +0.70%   50% |      573  +0.59%*  48%  UP
+   85 |      425  +0.35%   55% |      249  +0.64%   50% |      430  +0.72%*  50%  UP
+   90 |      330  +0.65%*  59% |      210  +0.52%   50% |      272  +0.94%*  48%  UP
+
+### TCS       ema_spread  (baseline signed_fwd = -0.41%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      538  +0.42%*  48% |      308  +0.46%   47% |      488  +0.86%*  56%  UP
+   85 |      546  +0.18%   47% |      280  +1.06%*  58% |      340  +1.11%*  56%  UP
+   90 |      489  +0.23%   50% |      226  +0.41%   56% |      190  +1.59%*  66%  UP
+
+### INFY      px_ema200   (baseline signed_fwd = -0.48%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      325  +1.55%*  62% |      266  +0.89%*  40% |      449  -0.31%   46%  flat/down
+   85 |      273  +2.08%*  57% |      229  +0.56%   41% |      332  -0.22%   46%  flat/down
+   90 |      211  +1.39%*  48% |      167  +0.49%   49% |      217  +0.07%   46%  flat/down
+
+### INFY      ema_spread  (baseline signed_fwd = -0.30%)
+    θ |         n=1 (240 only) |            n=2 (+1 TF) |            n=3 (all 3)  gradient
+      |      N   edge   revhit |      N   edge   revhit |      N   edge   revhit
+   80 |      396  +1.30%*  61% |      267  +1.35%*  49% |      380  -0.45%   44%  flat/down
+   85 |      322  +1.48%*  56% |      230  +0.60%*  41% |      274  -0.34%   45%  flat/down
+   90 |      270  +1.60%*  53% |      200  +0.10%   44% |      169  +0.08%   48%  flat/down
+
+========================================================================================================
+SUMMARY @θ85 — does all-3-aligned beat 240m-alone? (edge_n3 vs edge_n1)
+========================================================================================================
+  BANKNIFTY px_ema200  n1= 344 n3= 303  Δ(n3-n1)=  +0.34%  n3 revhit= 56%  STRONGER when aligned
+  BANKNIFTY ema_spread n1= 376 n3= 218  Δ(n3-n1)=  +0.79%  n3 revhit= 58%  STRONGER when aligned
+  ICICIBANK px_ema200  n1= 255 n3= 321  Δ(n3-n1)=  -0.07%  n3 revhit= 53%  not stronger
+  ICICIBANK ema_spread n1= 338 n3= 245  Δ(n3-n1)=  +0.69%  n3 revhit= 60%  STRONGER when aligned
+  RELIANCE  px_ema200  n1= 321 n3= 374  Δ(n3-n1)=  +0.49%  n3 revhit= 55%  STRONGER when aligned
+  RELIANCE  ema_spread n1= 423 n3= 310  Δ(n3-n1)=  +0.15%  n3 revhit= 53%  STRONGER when aligned
+  HDFCBANK  px_ema200  n1= 371 n3= 389  Δ(n3-n1)=  +0.71%  n3 revhit= 42%  STRONGER when aligned
+  HDFCBANK  ema_spread n1= 419 n3= 307  Δ(n3-n1)=  +0.84%  n3 revhit= 44%  STRONGER when aligned
+  TCS       px_ema200  n1= 425 n3= 430  Δ(n3-n1)=  +0.37%  n3 revhit= 50%  STRONGER when aligned
+  TCS       ema_spread n1= 546 n3= 340  Δ(n3-n1)=  +0.93%  n3 revhit= 56%  STRONGER when aligned
+  INFY      px_ema200  n1= 273 n3= 332  Δ(n3-n1)=  -2.29%  n3 revhit= 46%  not stronger
+  INFY      ema_spread n1= 322 n3= 274  Δ(n3-n1)=  -1.81%  n3 revhit= 45%  not stronger

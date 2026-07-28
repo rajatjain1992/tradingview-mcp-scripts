@@ -1,0 +1,114 @@
+//@version=5
+indicator("MTF Spread-Exhaustion (directional percentile)", "SpreadExhaust Dir", overlay=false, max_bars_back=1000)
+
+// ============================ Inputs ============================
+l1 = input.int(20,  "EMA fast (sign ref)", minval=1, group="EMAs")
+l2 = input.int(50,  "EMA 2", minval=1, group="EMAs")
+l3 = input.int(100, "EMA 3", minval=1, group="EMAs")
+l4 = input.int(200, "EMA slow (sign ref + denominator)", minval=1, group="EMAs")
+
+prLen = input.int(200, "Percentile lookback (bars)", minval=20, group="Calc",
+     tooltip="Lower (~50-100) for trending single stocks; higher (~200-500) for mean-reverting indices.")
+upTh  = input.int(85, "Exhaustion |percentile| for count/alert", minval=50, maxval=100, group="Calc")
+alignN = input.int(4, "Alert when this many TFs at an extreme", minval=1, maxval=8, group="Calc")
+
+showAgg = input.bool(true, "Show aggregate (mean) line", group="Display")
+showTbl = input.bool(true, "Show table", group="Display")
+useTF5   = input.bool(true, "5m",   inline="t1", group="Timeframes")
+useTF15  = input.bool(true, "15m",  inline="t1", group="Timeframes")
+useTF30  = input.bool(true, "30m",  inline="t1", group="Timeframes")
+useTF60  = input.bool(true, "60m",  inline="t2", group="Timeframes")
+useTF120 = input.bool(true, "120m", inline="t2", group="Timeframes")
+useTF240 = input.bool(true, "240m", inline="t2", group="Timeframes")
+useTFD   = input.bool(true, "D",    inline="t3", group="Timeframes")
+useTFW   = input.bool(true, "W",    inline="t3", group="Timeframes")
+
+// ============ Directional fan-spread percentile (-100..+100) ============
+// magnitude = (maxEMA - minEMA) / EMA200 * 100  (stable denominator, always >=0)
+// signedPct = sign(EMA20 vs EMA200) * percentile(magnitude)
+f_calc() =>
+    e1 = ta.ema(close, l1)
+    e2 = ta.ema(close, l2)
+    e3 = ta.ema(close, l3)
+    e4 = ta.ema(close, l4)
+    mx = math.max(e1, e2, e3, e4)
+    mn = math.min(e1, e2, e3, e4)
+    fan = (mx - mn) / e4 * 100.0          // ribbon width, % of EMA200
+    magPct = ta.percentrank(fan, prLen)    // 0..100
+    sgn = e1 >= e4 ? 1.0 : -1.0
+    signedPct = sgn * magPct               // -100..+100
+    [signedPct, sgn * fan]                 // also return signed raw width for table
+
+[v5,r5]     = request.security(syminfo.tickerid, "5",   f_calc())
+[v15,r15]   = request.security(syminfo.tickerid, "15",  f_calc())
+[v30,r30]   = request.security(syminfo.tickerid, "30",  f_calc())
+[v60,r60]   = request.security(syminfo.tickerid, "60",  f_calc())
+[v120,r120] = request.security(syminfo.tickerid, "120", f_calc())
+[v240,r240] = request.security(syminfo.tickerid, "240", f_calc())
+[vD,rD]     = request.security(syminfo.tickerid, "D",   f_calc())
+[vW,rW]     = request.security(syminfo.tickerid, "W",   f_calc())
+
+// ============================ Colors (shared by lines + table legend) ============================
+c5   = #ffffff   // 5m  — bright white (starker)
+c15  = #00e5ff   // 15m — electric cyan (starker)
+c30  = #26c6da   // 30m
+c60  = #42a5f5   // 60m
+c120 = #ab47bc   // 120m
+c240 = #ffa726   // 240m
+cD   = #ffee58   // D
+cW   = #ef5350   // W
+
+// ============================ Directional lines ============================
+plot(useTF5   ? v5   : na, "5m",   color=color.new(c5,   0),  linewidth=2)
+plot(useTF15  ? v15  : na, "15m",  color=color.new(c15,  0),  linewidth=2)
+plot(useTF30  ? v30  : na, "30m",  color=color.new(c30,  15), linewidth=1)
+plot(useTF60  ? v60  : na, "60m",  color=color.new(c60,  10), linewidth=2)
+plot(useTF120 ? v120 : na, "120m", color=color.new(c120, 0),  linewidth=2)
+plot(useTF240 ? v240 : na, "240m", color=color.new(c240, 0),  linewidth=2)
+plot(useTFD   ? vD   : na, "D",    color=color.new(cD,   0),  linewidth=3)
+plot(useTFW   ? vW   : na, "W",    color=color.new(cW,   0),  linewidth=3)
+
+cnt = (useTF5?1:0)+(useTF15?1:0)+(useTF30?1:0)+(useTF60?1:0)+(useTF120?1:0)+(useTF240?1:0)+(useTFD?1:0)+(useTFW?1:0)
+sumV = (useTF5?nz(v5):0)+(useTF15?nz(v15):0)+(useTF30?nz(v30):0)+(useTF60?nz(v60):0)+(useTF120?nz(v120):0)+(useTF240?nz(v240):0)+(useTFD?nz(vD):0)+(useTFW?nz(vW):0)
+aggV = cnt > 0 ? sumV / cnt : na
+plot(showAgg ? aggV : na, "Aggregate", color=color.new(color.white, 0), linewidth=2, style=plot.style_stepline)
+
+// ============================ Zones ============================
+hUp   = hline(85,  "up-exhaustion",   color=color.new(#ef5350, 40), linestyle=hline.style_dashed)
+hTop  = hline(100, "", color=color.new(color.gray, 100))
+hDn   = hline(-85, "down-exhaustion", color=color.new(#26a69a, 40), linestyle=hline.style_dashed)
+hBot  = hline(-100,"", color=color.new(color.gray, 100))
+hline(0, "compressed / trendless", color=color.new(color.gray, 60), linestyle=hline.style_dotted)
+fill(hUp, hTop, color=color.new(#ef5350, 90))
+fill(hDn, hBot, color=color.new(#26a69a, 90))
+
+f_up(u,v) => u and not na(v) and v >=  upTh ? 1 : 0
+f_dn(u,v) => u and not na(v) and v <= -upTh ? 1 : 0
+upCount = f_up(useTF5,v5)+f_up(useTF15,v15)+f_up(useTF30,v30)+f_up(useTF60,v60)+f_up(useTF120,v120)+f_up(useTF240,v240)+f_up(useTFD,vD)+f_up(useTFW,vW)
+dnCount = f_dn(useTF5,v5)+f_dn(useTF15,v15)+f_dn(useTF30,v30)+f_dn(useTF60,v60)+f_dn(useTF120,v120)+f_dn(useTF240,v240)+f_dn(useTFD,vD)+f_dn(useTFW,vW)
+
+// ============================ Table (+ color legend) ============================
+// Col 0 = color swatch (matches each line), col 1 = TF name, col 2 = value.
+var table t = table.new(position.top_right, 3, 10, border_width=1, frame_color=color.new(color.gray,40), frame_width=1)
+f_cell(u, v, r) => u ? (na(v) ? "–" : str.tostring(v, "+#;-#") + "   (" + str.tostring(r, "+#.#;-#.#") + "%)") : "off"
+f_tcol(v) => na(v) ? color.new(color.gray,80) : v >= upTh ? color.new(#ef5350,25) : v <= -upTh ? color.new(#26a69a,25) : color.new(color.gray,70)
+if showTbl and barstate.islast
+    table.cell(t, 0, 0, "",            width=1, height=2, bgcolor=color.new(color.gray,25), text_size=size.tiny)
+    table.cell(t, 1, 0, "TF",          width=3, height=2, text_color=color.white, bgcolor=color.new(color.gray,25), text_size=size.tiny)
+    table.cell(t, 2, 0, "dirPct (w%)", height=2, text_color=color.white, bgcolor=color.new(color.gray,25), text_size=size.tiny)
+    us = array.from(useTF5,useTF15,useTF30,useTF60,useTF120,useTF240,useTFD,useTFW)
+    nm = array.from("5m","15m","30m","60m","120m","240m","D","W")
+    vs = array.from(v5,v15,v30,v60,v120,v240,vD,vW)
+    rs = array.from(r5,r15,r30,r60,r120,r240,rD,rW)
+    cl = array.from(c5,c15,c30,c60,c120,c240,cD,cW)
+    for i = 0 to 7
+        on = array.get(us,i)
+        table.cell(t, 0, i+1, "", width=1, height=2, bgcolor=on ? array.get(cl,i) : color.new(color.gray,80))
+        table.cell(t, 1, i+1, array.get(nm,i), width=3, height=2, text_color=color.white, text_size=size.tiny)
+        table.cell(t, 2, i+1, f_cell(on, array.get(vs,i), array.get(rs,i)), height=2, text_color=color.white, bgcolor=f_tcol(array.get(vs,i)), text_size=size.tiny)
+    table.cell(t, 0, 9, "", width=1, height=2, bgcolor=color.new(color.gray,20))
+    table.cell(t, 1, 9, "EXT", width=3, height=2, text_color=color.white, bgcolor=color.new(color.gray,20), text_size=size.tiny)
+    table.cell(t, 2, 9, "▲up "+str.tostring(upCount)+"  ▼dn "+str.tostring(dnCount), height=2, text_color=color.white, text_size=size.tiny)
+
+// ============================ Alerts ============================
+alertcondition(ta.crossover(math.max(upCount,dnCount), alignN - 0.5), "TFs at extreme", "MTF spread-exhaustion: multiple timeframes at a directional extreme")

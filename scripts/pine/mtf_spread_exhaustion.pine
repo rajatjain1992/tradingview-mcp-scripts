@@ -1,0 +1,90 @@
+//@version=5
+indicator("MTF Spread-Exhaustion Alignment", "SpreadExhaust MTF", overlay=false, max_bars_back=500)
+
+// ============================ Inputs ============================
+metricType = input.string("EMA Spread (20-200)", "Exhaustion metric", options=["EMA Spread (20-200)","Price vs EMA200","Price vs EMA20"])
+fastLen  = input.int(20,  "Fast EMA", minval=1, group="Calc")
+slowLen  = input.int(200, "Slow EMA", minval=1, group="Calc")
+prLen    = input.int(200, "Percentile lookback (bars)", minval=20, group="Calc")
+upTh     = input.float(90, "Exhaustion percentile", minval=50, maxval=100, group="Calc")
+alignTh  = input.int(5, "Alert when this many TFs align", minval=1, maxval=8, group="Calc")
+showRibbons = input.bool(true, "Show TF ribbons", group="Display")
+showNet     = input.bool(true, "Show net-lean line", group="Display")
+showTable   = input.bool(true, "Show table",  group="Display")
+
+cUp = input.color(color.new(#f23645, 0), "Up-exhaustion (stretched UP / bearish lean)", group="Colors")
+cDn = input.color(color.new(#089981, 0), "Down-exhaustion (stretched DOWN / bullish lean)", group="Colors")
+cNe = color.new(color.gray, 82)
+
+// ======================== Per-TF exhaustion ========================
+// For a timeframe: compute the chosen stretch metric, take its rolling percentile
+// (0..100). +1 = stretched UP beyond upTh; -1 = stretched DOWN beyond (100-upTh).
+f_calc() =>
+    ef = ta.ema(close, fastLen)
+    es = ta.ema(close, slowLen)
+    m = metricType == "EMA Spread (20-200)" ? (ef - es) / es * 100 : metricType == "Price vs EMA200" ? (close - es) / es * 100 : (close - ef) / ef * 100
+    pr = ta.percentrank(m, prLen)
+    // exhaustion needs BOTH an extreme percentile AND a matching stretch sign:
+    // red/up only when spread>0, green/down only when spread<0.
+    d = na(pr) ? 0 : (m > 0 and pr >= upTh) ? 1 : (m < 0 and pr <= (100 - upTh)) ? -1 : 0
+    [d, pr]
+
+[d5,p5]     = request.security(syminfo.tickerid, "5",   f_calc())
+[d15,p15]   = request.security(syminfo.tickerid, "15",  f_calc())
+[d30,p30]   = request.security(syminfo.tickerid, "30",  f_calc())
+[d60,p60]   = request.security(syminfo.tickerid, "60",  f_calc())
+[d120,p120] = request.security(syminfo.tickerid, "120", f_calc())
+[d240,p240] = request.security(syminfo.tickerid, "240", f_calc())
+[dD,pD]     = request.security(syminfo.tickerid, "D",   f_calc())
+[dW,pW]     = request.security(syminfo.tickerid, "W",   f_calc())
+
+netScore = d5 + d15 + d30 + d60 + d120 + d240 + dD + dW
+upCount  = (d5>0?1:0)+(d15>0?1:0)+(d30>0?1:0)+(d60>0?1:0)+(d120>0?1:0)+(d240>0?1:0)+(dD>0?1:0)+(dW>0?1:0)
+dnCount  = (d5<0?1:0)+(d15<0?1:0)+(d30<0?1:0)+(d60<0?1:0)+(d120<0?1:0)+(d240<0?1:0)+(dD<0?1:0)+(dW<0?1:0)
+dom      = math.max(upCount, dnCount)
+
+f_col(d) => d > 0 ? cUp : d < 0 ? cDn : cNe
+
+// ============================ Ribbons ============================
+// One horizontal ribbon per timeframe (5m at bottom -> W at top).
+plot(showRibbons ? 1 : na, "5m",   color=f_col(d5),   linewidth=8, style=plot.style_linebr)
+plot(showRibbons ? 2 : na, "15m",  color=f_col(d15),  linewidth=8, style=plot.style_linebr)
+plot(showRibbons ? 3 : na, "30m",  color=f_col(d30),  linewidth=8, style=plot.style_linebr)
+plot(showRibbons ? 4 : na, "60m",  color=f_col(d60),  linewidth=8, style=plot.style_linebr)
+plot(showRibbons ? 5 : na, "120m", color=f_col(d120), linewidth=8, style=plot.style_linebr)
+plot(showRibbons ? 6 : na, "240m", color=f_col(d240), linewidth=8, style=plot.style_linebr)
+plot(showRibbons ? 7 : na, "D",    color=f_col(dD),   linewidth=8, style=plot.style_linebr)
+plot(showRibbons ? 8 : na, "W",    color=f_col(dW),   linewidth=8, style=plot.style_linebr)
+
+// Net-lean line mapped into the 0..8 ribbon band (4.5 = neutral, up = more UP-aligned)
+plot(showNet ? (netScore + 8) / 2.0 : na, "Net lean", color=color.new(color.white, 0), linewidth=2)
+
+// ===================== Coincidence background =====================
+// Background tints toward the dominant side; stronger tint = more TFs coinciding.
+bgc = netScore > 0 ? color.new(cUp, 100 - math.min(dom,8)*7) : netScore < 0 ? color.new(cDn, 100 - math.min(dom,8)*7) : na
+bgcolor(bgc)
+hline(4.5, "neutral", color=color.new(color.gray, 60), linestyle=hline.style_dotted)
+
+// ============================= Table =============================
+var table t = table.new(position.top_right, 3, 10, border_width=1, frame_color=color.new(color.gray,40), frame_width=1)
+f_arrow(d) => d > 0 ? "▲ up" : d < 0 ? "▼ dn" : "–"
+if showTable and barstate.islast
+    table.cell(t, 0, 0, "TF",    text_color=color.white, bgcolor=color.new(color.gray,30), text_size=size.small)
+    table.cell(t, 1, 0, "State", text_color=color.white, bgcolor=color.new(color.gray,30), text_size=size.small)
+    table.cell(t, 2, 0, "%ile",  text_color=color.white, bgcolor=color.new(color.gray,30), text_size=size.small)
+    names = array.from("5m","15m","30m","60m","120m","240m","D","W")
+    ds    = array.from(d5,d15,d30,d60,d120,d240,dD,dW)
+    ps    = array.from(p5,p15,p30,p60,p120,p240,pD,pW)
+    for i = 0 to 7
+        di = array.get(ds, i)
+        col = f_col(di)
+        pv = array.get(ps, i)
+        table.cell(t, 0, i+1, array.get(names,i), text_color=color.white, text_size=size.small)
+        table.cell(t, 1, i+1, f_arrow(di), text_color=color.white, bgcolor=color.new(col, di==0?88:25), text_size=size.small)
+        table.cell(t, 2, i+1, na(pv) ? "–" : str.tostring(pv, "#"), text_color=color.white, text_size=size.small)
+    table.cell(t, 0, 9, "NET", text_color=color.white, bgcolor=color.new(color.gray,20), text_size=size.small)
+    table.cell(t, 1, 9, (netScore>0?"+":"") + str.tostring(netScore), text_color=color.white, bgcolor=color.new(netScore>0?cUp:netScore<0?cDn:color.gray, 25), text_size=size.small)
+    table.cell(t, 2, 9, "↑"+str.tostring(upCount)+"  ↓"+str.tostring(dnCount), text_color=color.white, text_size=size.small)
+
+// ============================= Alerts =============================
+alertcondition(ta.crossover(math.abs(netScore), alignTh - 0.5), "TFs aligned", "MTF spread-exhaustion: timeframes aligned")
