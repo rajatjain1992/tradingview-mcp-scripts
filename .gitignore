@@ -6,3 +6,4 @@ temp_*
 discovery-log.json
 __pycache__/
 *.pyc
+scripts/cache/
