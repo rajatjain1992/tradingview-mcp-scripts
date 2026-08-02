@@ -60,6 +60,7 @@ INDICES: dict[str, str] = {
     "NIFTY100": "nifty100",
     "NIFTY200": "nifty200",
     "NIFTY500": "nifty500",
+    "NIFTYTOTALMARKET": "niftytotalmarket_",
     "NIFTYMIDCAP50": "niftymidcap50",
     "NIFTYMIDCAP100": "niftymidcap100",
     "NIFTYMIDCAP150": "niftymidcap150",
