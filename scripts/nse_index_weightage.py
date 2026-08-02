@@ -91,7 +91,39 @@ INDICES: dict[str, str] = {
     "NIFTYMNC": "niftymnc",
     "NIFTYDIVOPPS50": "niftydivopp50",
     "NIFTYSERVICE": "niftyservice",
+    # sector indices added 2026-08-02
+    "NIFTYCEMENT": "niftycement_",
+    "NIFTYCHEMICALS": "niftychemicals_",
+    "NIFTYENERGY": "niftyenergy",
+    "NIFTYCAPITALMKT": "niftycapitalmarkets_",
+    "NIFTYCOREHOUSING": "niftycorehousing_",
+    # midcap/smallcap variants added 2026-08-02
+    "NIFTYMIDCAP150QLTY50": "niftymidcap150quality50",
+    "NIFTYMIDCAP150MOM50": "niftymidcap150momentum50_",
+    "NIFTYSMALLCAP500": "niftysmallcap500_",
+    "NIFTYMICROCAP250": "niftymicrocap250_",
+    "NIFTYMIDSMALLCAP400MOMQLTY100": "niftymidsmallcap400momentumquality100_",
+    "NIFTYTOTALMKTMOMQLTY50": "niftytotalmarketmomentumquality50_",
+    "NIFTYSMALLCAP250MOMQLTY100": "niftysmallcap250momentumquality100_",
+    "NIFTYMIDCAPSELECT": "niftymidcapselect_",
+    "NIFTYMIDSMALLCAP400_5050": "niftymidsmallcap4005050_",
 }
+
+# Live NSE indices NOT covered above (checked 2026-08-02) -- no discoverable
+# constituent CSV at niftyindices.com's /IndexConstituent/ path under any
+# guessed slug, so they're left out rather than silently wrong:
+#   India-theme: NIFTY INDIA DEFENCE, DIGITAL, INTERNET, MANUFACTURING,
+#     NEW AGE CONSUMPTION, RAILWAYS PSU, TOURISM, INFRASTRUCTURE & LOGISTICS,
+#     FPI 150, NON-CYCLICAL CONSUMER
+#   Sector: NIFTY HOUSING, NIFTY EV & NEW AGE AUTOMOTIVE
+#   Midcap/smallcap: NIFTY MIDCAP LIQUID 15, NIFTY SMALLCAP250 QUALITY 50
+#   Niche: NIFTY SME EMERGE, NIFTY IPO, NIFTY MOBILITY,
+#     NIFTY TRANSPORTATION & LOGISTICS, NIFTY RURAL, NIFTY WAVES,
+#     NIFTY MIDSMALL FINANCIAL SERVICES/HEALTHCARE/INDIA CONSUMPTION/IT & TELECOM
+#   Non-equity: INDIA VIX, all G-Sec/Bharat Bond indices
+#   Strategy/factor/smart-beta (~50): Alpha/Quality/Low-Vol/Momentum/Equal
+#     Weight/ESG variants of Nifty50/100/200/500, PR/TR leverage-inverse,
+#     USD/Shariah, Top-N Equal Weight, etc. -- out of scope, separate ask.
 
 # niftyindices.com uses a DIFFERENT (inconsistently underscored) slug for the
 # factsheet PDF than for the constituent CSV. Only include an entry here once
