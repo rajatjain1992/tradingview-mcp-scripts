@@ -1,0 +1,11 @@
+scrip,call,n_setups_fired,setups,conviction_score
+ADANIPOWER,Long,3,TREND 240m v>=+70 (Long); TREND 240m v>=+80 (Long); ALIGN 240m&D>=+50 (Long),2.86
+TATASTEEL,Long,1,TREND W v>=+70 (Long),0.42
+EASEMYTRIP,NoCall,0,-,0.0
+IDEA,NoCall,0,-,0.0
+JPPOWER,NoCall,0,-,0.0
+IRB,NoCall,0,-,0.0
+SUZLON,NoCall,0,-,0.0
+RPOWER,Short,1,ALIGN 240m&D<=-70 (Short),-1.0
+YESBANK,Short,1,ALIGN 240m&D<=-70 (Short),-1.0
+ETERNAL,Short,2,TREND 240m v<=-70 (Short); TREND 240m v<=-80 (Short),-1.48
