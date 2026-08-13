@@ -1,0 +1,194 @@
+//@version=5
+indicator("MTF adx Bees to Elephant", overlay=false, max_labels_count=50)
+
+show_adx_5m = input.bool(true, "Show adx 5m")
+show_adx_15m = input.bool(true, "Show adx 15m")
+show_adx_30m = input.bool(true, "Show adx 30m")
+show_adx_60m = input.bool(true, "Show adx 1H")
+show_adx_120m = input.bool(true, "Show adx 2H")
+show_adx_240m = input.bool(true, "Show adx 4H")
+show_adx_D = input.bool(true, "Show adx Daily")
+show_adx_W = input.bool(true, "Show adx Weekly")
+
+
+dmiLen = input.int(8, "ADX / DMI Length")
+DiffInput = input.int(12, "DI Difference Limit")
+adx_floor = input.float(5, "ADX Floor")
+trend_adx = input.float(23, "MTF Trend Min ADX")
+
+// ---- ADX sensitivity label ----
+grpSens   = "ADX Sensitivity (current TF)"
+showSens  = input.bool(true,  "Show sensitivity label",        group=grpSens)
+nPts      = input.float(3.0,  "ADX move to solve for (+/- n)", group=grpSens, minval=0.1, step=0.5)
+sensOffset= input.int(12,     "Label offset (bars right)",     group=grpSens)
+
+
+f_5m() =>
+    [p5, m5, adx_local] = ta.dmi(dmiLen, dmiLen)
+    adx_local
+
+adx_5m = request.security(syminfo.tickerid, "5", f_5m(), lookahead=barmerge.lookahead_off)
+adx_15m = request.security(syminfo.tickerid, "15", f_5m(), lookahead=barmerge.lookahead_off)
+adx_30m = request.security(syminfo.tickerid, "30", f_5m(), lookahead=barmerge.lookahead_off)
+adx_60m = request.security(syminfo.tickerid, "60", f_5m(), lookahead=barmerge.lookahead_off)
+adx_120m = request.security(syminfo.tickerid, "120", f_5m(), lookahead=barmerge.lookahead_off)
+adx_240m = request.security(syminfo.tickerid, "240", f_5m(), lookahead=barmerge.lookahead_off)
+adx_D = request.security(syminfo.tickerid, "D", f_5m(), lookahead=barmerge.lookahead_off)
+adx_W = request.security(syminfo.tickerid, "W", f_5m(), lookahead=barmerge.lookahead_off)
+
+
+c5   = #ffffff   // 5m  — bright white (starker)
+c15  = #00e5ff   // 15m — electric cyan (starker)
+c30  = #26c6da   // 30m
+c60  = #42a5f5   // 60m
+c120 = #ab47bc   // 120m
+c240 = #ffa726   // 240m
+cD   = #ffee58   // D
+cW   = #ef5350   // W
+
+
+
+
+plot(show_adx_5m ? adx_5m : na ,  "adx 5m", color= color.new(c5, 20), linewidth = 1)
+plot(show_adx_15m ? adx_15m : na ,  "adx 15m", color= color.new(c15,20), linewidth = 1)
+plot(show_adx_30m ? adx_30m : na ,  "adx 30m", color= color.new(c30,20), linewidth = 2)
+plot(show_adx_60m ? adx_60m : na ,  "adx 60m", color= color.new(c60, 20), linewidth = 2)
+plot(show_adx_120m ? adx_120m : na ,  "adx 120m", color= color.new(c120, 20), linewidth = 2)
+plot(show_adx_240m ? adx_240m : na ,  "adx 240m", color= color.new(c240,20), linewidth = 2)
+plot(show_adx_D ? adx_D : na ,  "adx D",  color= color.new(cD,20), linewidth = 3)
+plot(show_adx_W ? adx_W : na ,  "adx W", color= color.new(cW,20), linewidth = 3)
+
+hline(30,"Oversold Signal Line", linestyle = hline.style_dashed, color = color.green)
+hline(70,"Overbought Signal Line", linestyle = hline.style_dashed, color = color.red)
+hline(50,"Bullish Signal", linestyle = hline.style_dashed, color = color.white)
+
+
+var table wm = table.new(position.bottom_right, 1, 1)
+
+if barstate.islast
+    table.cell(wm, 0, 0, "MTF ADX", text_size=size.huge,
+               text_color=color.new(color.gray, 65),
+               bgcolor=color.new(color.black,100))
+
+
+
+cond = adx_5m< adx_15m and adx_15m< adx_60m and adx_5m<30 and  (adx_15m>25 and adx_15m<40) and  (adx_60m>55 and adx_60m<70) and (adx_5m - adx_60m)<-30
+bgcolor(cond ? color.new(color.yellow,90) : na)
+
+
+// =============================================================================
+// ADDITION 1 — is the chart's own timeframe one of the plotted ones?
+// =============================================================================
+// timeframe.period is unreliable across TF types ("1D" vs "D" etc), so build the
+// label from the explicit flags instead.
+curTF = timeframe.isweekly  ? "W" :
+        timeframe.isdaily   ? "D" :
+        timeframe.isintraday ? str.tostring(timeframe.multiplier) : "?"
+
+isPlottedTF = curTF == "5" or curTF == "15" or curTF == "30" or curTF == "60" or
+              curTF == "120" or curTF == "240" or curTF == "D" or curTF == "W"
+
+tfName = curTF == "60" ? "1H" : curTF == "120" ? "2H" : curTF == "240" ? "4H" :
+         curTF == "D" ? "Daily" : curTF == "W" ? "Weekly" : curTF + "m"
+
+tfCol = curTF == "5"   ? c5   : curTF == "15" ? c15 : curTF == "30"  ? c30 :
+        curTF == "60"  ? c60  : curTF == "120"? c120: curTF == "240" ? c240:
+        curTF == "D"   ? cD   : cW
+
+// =============================================================================
+// ADDITION 2 — how much price movement moves THIS timeframe's ADX by +/- n?
+// =============================================================================
+// THE MATH (exact, not a simulation):
+//   ADX is Wilder-smoothed DX:  ADX_next = (ADX*(len-1) + DX_next) / len
+//   Rearranged:                 dADX = (DX_next - ADX) / len
+//   Therefore:                  DX_next = ADX + dADX*len
+//   With len=8 and n=3 that is a 24-POINT DX jump in a single bar. Because DX is
+//   bounded [0,100], this immediately bounds what is even possible:
+//       raising  ADX by n needs ADX + n*len <= 100
+//       dropping ADX by n needs ADX - n*len >= 0   (so ADX<24 cannot fall 3 at len=8)
+//
+//   DX = 100*|+DI - -DI| / (+DI + -DI), and both DI share the same ATR
+//   denominator -- so ATR CANCELS and DX depends only on the smoothed +DM/-DM
+//   ratio. Writing a = rma(+DM)*(len-1) and b = rma(-DM)*(len-1), a next bar
+//   contributing +DM = P gives DX = 100*(a+P-b)/(a+P+b), which solves to
+//       P = b*(100+D)/(100-D) - a           [extend the dominant side]
+//   and a counter-side -DM = M that CONVERGES the DIs solves to
+//       M = (a*(100-D) - b*(100+D)) / (100+D)
+//
+//   ASSUMPTION: the next bar makes a new extreme on one side only (the other
+//   side's DM = 0). That is the cleanest single-bar model; a bar that makes both
+//   a new high AND a new low registers only the larger DM anyway.
+// -----------------------------------------------------------------------------
+// Local DMI, reimplemented to expose the internal rma state (ta.dmi hides it)
+f_dmi_state(len) =>
+    up = high - high[1]
+    dn = low[1] - low
+    plusDM  = (up > dn and up > 0) ? up : 0.0
+    minusDM = (dn > up and dn > 0) ? dn : 0.0
+    tr = math.max(high - low, math.max(math.abs(high - close[1]), math.abs(low - close[1])))
+    sP = ta.rma(plusDM, len)
+    sM = ta.rma(minusDM, len)
+    sT = ta.rma(tr, len)
+    pDI = sT == 0 ? 0.0 : 100.0 * sP / sT
+    mDI = sT == 0 ? 0.0 : 100.0 * sM / sT
+    dsum = pDI + mDI
+    dxv = dsum == 0 ? 0.0 : 100.0 * math.abs(pDI - mDI) / dsum
+    [ta.rma(dxv, len), sP, sM, dxv, pDI, mDI]
+
+[adxCur, sP, sM, dxCur, pDI, mDI] = f_dmi_state(dmiLen)
+
+aC = sP * (dmiLen - 1)      // carried +DM after this bar's rma step
+bC = sM * (dmiLen - 1)      // carried -DM
+upDom = pDI >= mDI          // which side currently dominates
+
+D_up = adxCur + nPts * dmiLen   // DX required next bar to RAISE adx by n
+D_dn = adxCur - nPts * dmiLen   // DX required next bar to DROP  adx by n
+
+// --- raise ADX: push the DOMINANT side further ---
+reqDM_up = D_up >= 100 ? na :
+     upDom ? bC * (100 + D_up) / (100 - D_up) - aC
+           : aC * (100 + D_up) / (100 - D_up) - bC
+
+// --- drop ADX: converge the DIs with a counter-side move ---
+reqDM_dn = D_dn < 0 ? na :
+     upDom ? (aC * (100 - D_dn) - bC * (100 + D_dn)) / (100 + D_dn)
+           : (bC * (100 - D_dn) - aC * (100 + D_dn)) / (100 + D_dn)
+
+// Convert required DM into an actual price level.
+//   +DM is measured off the PRIOR HIGH  -> new high = high + P
+//   -DM is measured off the PRIOR LOW   -> new low  = low  - M
+lvl_up = na(reqDM_up) ? na : (upDom ? high + reqDM_up : low  - reqDM_up)
+lvl_dn = na(reqDM_dn) ? na : (upDom ? low  - reqDM_dn : high + reqDM_dn)
+
+f_move(lvl) => na(lvl) ? na : lvl - close
+f_pct(lvl)  => na(lvl) ? na : (lvl - close) / close * 100.0
+
+f_leg(tag, lvl, impossible_msg) =>
+    na(lvl) ? tag + ": " + impossible_msg :
+     tag + ": " + str.tostring(lvl, format.mintick) +
+     "   (" + (f_move(lvl) >= 0 ? "+" : "") + str.tostring(f_move(lvl), format.mintick) +
+     ", " + (f_pct(lvl) >= 0 ? "+" : "") + str.tostring(f_pct(lvl), "#.##") + "%)"
+
+var label sensLbl = na
+if showSens and barstate.islast
+    label.delete(sensLbl)
+    if isPlottedTF
+        nStr = str.tostring(nPts, "#.#")
+        txt = tfName + " ADX " + str.tostring(adxCur, "#.##") +
+              "   (DX now " + str.tostring(dxCur, "#.#") + ", " + (upDom ? "+DI" : "-DI") + " leads)\n" +
+              "needs DX " + str.tostring(D_up, "#.#") + " to go +" + nStr +
+              "  |  DX " + str.tostring(D_dn, "#.#") + " to go -" + nStr + "\n" +
+              f_leg("ADX +" + nStr, lvl_up, "impossible in 1 bar (needs DX>100)") + "\n" +
+              f_leg("ADX -" + nStr, lvl_dn, "impossible in 1 bar (ADX < " + str.tostring(nPts * dmiLen, "#") + ")")
+        sensLbl := label.new(bar_index + sensOffset, adxCur, txt,
+             xloc=xloc.bar_index, yloc=yloc.price,
+             style=label.style_label_left,
+             color=color.new(color.black, 15), textcolor=tfCol,
+             size=size.small, textalign=text.align_left)
+    else
+        sensLbl := label.new(bar_index + sensOffset, adxCur,
+             "chart TF (" + tfName + ") is not one of the plotted timeframes",
+             xloc=xloc.bar_index, yloc=yloc.price,
+             style=label.style_label_left,
+             color=color.new(color.black, 40), textcolor=color.gray,
+             size=size.small, textalign=text.align_left)
