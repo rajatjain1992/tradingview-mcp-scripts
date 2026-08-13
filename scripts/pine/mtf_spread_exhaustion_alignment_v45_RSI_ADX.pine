@@ -151,6 +151,7 @@ plot(en8   ? adxW   : na, "W",    color=color.new(cW,   0),  linewidth=3,display
 
 
 
+
 plot(showDist ? dist_v15 : na , "v15 Distance",   color=color.new(color.silver,85), style = plot.style_area,histbase = 0)
 plot(showDist ? dist_v30 : na, "v30 Distance",   color=color.new(color.yellow,90), style = plot.style_area,histbase = 0)
 plot(showDist ? dist_v60 : na, "v60 Distance",   color=color.new(color.blue,93), style = plot.style_area,histbase = 0)
@@ -178,12 +179,12 @@ dnCount = f_dn(en1,v5)+f_dn(en2,v15)+f_dn(en3,v30)+f_dn(en4,v60)+f_dn(en5,v120)+
 
 // ============================ Table (+ color legend) ============================
 // Col 0 = color swatch (matches each line), col 1 = TF name, col 2 = value.
-var table t = table.new(position.bottom_right, 3, 10, border_width=1, frame_color=color.new(color.gray,40), frame_width=1)
+var table t = table.new(position.bottom_right, 3, 10, border_width=1, frame_color=color.new(color.gray,40), frame_width=2)
 f_cell(u, v, r) => u ? (na(v) ? "–" : str.tostring(v, "+#;-#") + "   (" + str.tostring(r, "+#.#;-#.#") + "%)") : "off"
 f_tcol(v) => na(v) ? color.new(color.gray,80) : v >= upTh ? color.new(#ef5350,25) : v <= -upTh ? color.new(#26a69a,25) : color.new(color.gray,70)
 if showTbl and barstate.islast
-    table.cell(t, 0, 0, "",            width=1, height=2, bgcolor=color.new(color.gray,25), text_size=size.tiny)
-    table.cell(t, 1, 0, "TF",          width=3, height=2, text_color=color.white, bgcolor=color.new(color.gray,25), text_size=size.tiny)
+    table.cell(t, 0, 0, "",            width=1, height=3, bgcolor=color.new(color.gray,25), text_size=size.tiny)
+    table.cell(t, 1, 0, "TF",          width=3, height=3, text_color=color.white, bgcolor=color.new(color.gray,25), text_size=size.tiny)
     table.cell(t, 2, 0, "dirPct (w%)", height=2, text_color=color.white, bgcolor=color.new(color.gray,25), text_size=size.tiny)
     us = array.from(en1,en2,en3,en4,en5,en6,en7,en8)
     nm = array.from("5m","15m","30m","60m","120m","240m","D","W")
@@ -192,8 +193,8 @@ if showTbl and barstate.islast
     cl = array.from(c5,c15,c30,c60,c120,c240,cD,cW)
     for i = 0 to 7
         on = array.get(us,i)
-        table.cell(t, 0, i+1, "", width=1, height=2, bgcolor=on ? array.get(cl,i) : color.new(color.gray,80))
-        table.cell(t, 1, i+1, array.get(nm,i), width=3, height=2, text_color=color.white, text_size=size.tiny)
+        table.cell(t, 0, i+1, "", width=1, height=3, bgcolor=on ? array.get(cl,i) : color.new(color.gray,80))
+        table.cell(t, 1, i+1, array.get(nm,i), width=3, height=3, text_color=color.white, text_size=size.tiny)
         table.cell(t, 2, i+1, f_cell(on, array.get(vs,i), array.get(rs,i)), height=2, text_color=color.white, bgcolor=f_tcol(array.get(vs,i)), text_size=size.tiny)
     table.cell(t, 0, 9, "", width=1, height=2, bgcolor=color.new(color.gray,20))
     table.cell(t, 1, 9, "EXT", width=3, height=2, text_color=color.white, bgcolor=color.new(color.gray,20), text_size=size.tiny)
@@ -229,8 +230,12 @@ if barstate.islast
 
 
 //cond = (v240 < 2 and v240>-2) and (v120 < 2 and v120>-2) and (v60 < 2 and v60>-2)
-cond = (vD < -2 and vD>-5) and (v240 < 0 and v240>-3) and (v120 < 4 and v120>-2) and (v60 < 5 and v60>-5) and (v30 >70) and (v15>70) and (v60>v120 and v120>v240 and v240>vD)
-
-bgcolor(cond ? color.new(color.yellow,80 ) : na)
-
-
+// cond = (v240>0 and v240<30) and (v120>77)
+// //(vD < 1 and vD>-2) and (vW>-1 and vW<1)
+// //and (v240>0 and v240<30) and (v120>77) and (v60>85) and (v30>80 and v30<90))
+// var int totalCount = 0
+// if cond
+//     totalCount += 1
+// bgcolor(cond ? color.new(color.yellow,80 ) : na)
+// if barstate.islast
+//     label.new(bar_index, 0, "Matches (5000 bars): " + str.tostring(totalCount), style=label.style_label_down, color=color.orange)
