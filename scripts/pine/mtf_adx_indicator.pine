@@ -1,0 +1,393 @@
+//@version=5
+indicator("MTF adx Bees to Elephant", overlay=false, max_labels_count=50)
+
+
+
+grp = "Timeframes"
+
+en1 = input.bool(true,  "Show TF1", inline="tf1", group=grp)
+tf1 = input.timeframe("5",   "",  inline="tf1", group=grp)
+
+en2 = input.bool(true,  "Show TF2", inline="tf2", group=grp)
+tf2 = input.timeframe("15",  "",  inline="tf2", group=grp)
+
+en3 = input.bool(true,  "Show TF3", inline="tf3", group=grp)
+tf3 = input.timeframe("30",  "",  inline="tf3", group=grp)
+
+en4 = input.bool(true,  "Show TF4", inline="tf4", group=grp)
+tf4 = input.timeframe("60",  "",  inline="tf4", group=grp)
+
+en5 = input.bool(true,  "Show TF5", inline="tf5", group=grp)
+tf5 = input.timeframe("120", "",  inline="tf5", group=grp)
+
+en6 = input.bool(true,  "Show TF6", inline="tf6", group=grp)
+tf6 = input.timeframe("240", "",  inline="tf6", group=grp)
+
+en7 = input.bool(true,  "Show TF7", inline="tf7", group=grp)
+tf7 = input.timeframe("D",   "",  inline="tf7", group=grp)
+
+en8 = input.bool(true,  "Show TF8", inline="tf8", group=grp)
+tf8 = input.timeframe("W",   "",  inline="tf8", group=grp)
+
+en9 = input.bool(true,  "Show TF8", inline="tf0", group=grp)
+tf9 = input.timeframe("M",   "",  inline="tf9", group=grp)
+
+showDist = input.bool(false, "Show Distance Areas", group="Display")
+
+showAgg = input.bool(true, "Show aggregate (mean) line", group="Display")
+showTbl = input.bool(true, "Show table", group="Display")
+
+userange   = input.bool(true, "Range",    inline="t3", group="Timeframes")
+
+
+dmiLen = input.int(8, "ADX / DMI Length")
+rsiLen = input.int(8, "RSI Length")
+DiffInput = input.int(12, "DI Difference Limit")
+adx_floor = input.float(16, "ADX Floor")
+trend_adx = input.float(21, "MTF Trend Min ADX")
+
+// ---- ADX sensitivity label ----
+grpSens = "ADX Sensitivity (current TF)"
+showSens = input.bool(true, "Show sensitivity label", group=grpSens)
+nPts = input.float(3.0, "ADX move to solve for (+/- n)", group=grpSens, minval=0.1, step=0.5)
+sensOffset = input.int(12, "Label offset (bars right)", group=grpSens)
+
+chartTfSec = timeframe.in_seconds(timeframe.period)
+
+show1 = en1 and chartTfSec <= timeframe.in_seconds(tf1)
+show2 = en2 and chartTfSec <= timeframe.in_seconds(tf2)
+show3 = en3 and chartTfSec <= timeframe.in_seconds(tf3)
+show4 = en4 and chartTfSec <= timeframe.in_seconds(tf4)
+show5 = en5 and chartTfSec <= timeframe.in_seconds(tf5)
+show6 = en6 and chartTfSec <= timeframe.in_seconds(tf6)
+show7 = en7 and chartTfSec <= timeframe.in_seconds(tf7)
+show8 = en8 and chartTfSec <= timeframe.in_seconds(tf8)
+show9 = en9 and chartTfSec <= timeframe.in_seconds(tf9)
+
+
+f_calc() =>
+    rsi2_local = ta.ema(ta.rsi(close, rsiLen),8)
+    [p5, m5, adx_local] = ta.dmi(dmiLen, dmiLen)
+    [rsi2_local,adx_local]
+
+
+[rsi5,adx5]     = request.security(syminfo.tickerid, tf1,   f_calc())
+[rsi15,adx15]   = request.security(syminfo.tickerid, tf2,  f_calc())
+[rsi30,adx30]   = request.security(syminfo.tickerid, tf3,  f_calc())
+[rsi60,adx60]   = request.security(syminfo.tickerid, tf4,  f_calc())
+[rsi120,adx120] = request.security(syminfo.tickerid, tf5, f_calc())
+[rsi240,adx240] = request.security(syminfo.tickerid, tf6, f_calc())
+[rsiD,adxD]     = request.security(syminfo.tickerid, tf7,   f_calc())
+[rsiW,adxW]     = request.security(syminfo.tickerid, tf8,   f_calc())
+[rsiM,adxM]     = request.security(syminfo.tickerid, tf9,   f_calc())
+
+
+// ============================ Colors (shared by lines + table legend) ============================
+c5   = #ffffff   // 5m  — bright white (starker)
+c15  = #00e5ff   // 15m — electric cyan (starker)
+c30  = #26c6da   // 30m
+c60  = #42a5f5   // 60m
+c120 = #ab47bc   // 120m
+c240 = #ffa726   // 240m
+cD   = #ffee58   // D
+cW   = #ef5350   // W
+cM   = #ffffff  // W
+cRange = #faf4f4
+
+// ============================ Directional lines ============================
+plot(show1   ? adx5   : na, "5m",   color=color.new(c5,   0),  linewidth=1)
+plot(show2  ? adx15  : na, "15m",  color=color.new(c15,  0),  linewidth=1)
+plot(show3  ? adx30  : na, "30m",  color=color.new(c30,  15), linewidth=2)
+plot(show4  ? adx60  : na, "60m",  color=color.new(c60,  10), linewidth=2)
+plot(show5 ? adx120 : na, "120m", color=color.new(c120, 0),  linewidth=2)
+plot(show6 ? adx240 : na, "240m", color=color.new(c240, 0),  linewidth=2)
+plot(show7   ? adxD   : na, "D",    color=color.new(cD,   0),  linewidth=3)
+plot(show8   ? adxW   : na, "W",    color=color.new(cW,   0),  linewidth=3)
+plot(show9   ? adxM   : na, "W",    color=color.new(cM,   0),  linewidth=3)
+
+
+
+hline(30,"Oversold Signal Line", linestyle = hline.style_dashed, color = color.green)
+hline(70,"Overbought Signal Line", linestyle = hline.style_dashed, color = color.red)
+hline(50,"Bullish Signal", linestyle = hline.style_dashed, color = color.white)
+
+
+var table wm = table.new(position.bottom_right, 1, 1)
+
+if barstate.islast
+    table.cell(wm, 0, 0, "MTF ADX", text_size=size.huge,
+               text_color=color.new(color.gray, 65),
+               bgcolor=color.new(color.black,100))
+    
+
+
+
+
+
+// =============================================================================
+// CURRENT TIMEFRAME
+// =============================================================================
+
+curTF = timeframe.isweekly ? "W" : timeframe.isdaily ? "D" : timeframe.isintraday ? str.tostring(timeframe.multiplier) : "?"
+
+isPlottedTF = curTF == "5" or curTF == "15" or curTF == "30" or curTF == "60" or curTF == "120" or curTF == "240" or curTF == "D" or curTF == "W"
+
+tfName = curTF == "60" ? "1H" : curTF == "120" ? "2H" : curTF == "240" ? "4H" : curTF == "D" ? "Daily" : curTF == "W" ? "Weekly" : curTF + "m"
+
+tfCol = curTF == "5" ? c5 : curTF == "15" ? c15 : curTF == "30" ? c30 : curTF == "60" ? c60 : curTF == "120" ? c120 : curTF == "240" ? c240 : curTF == "D" ? cD : cW
+
+// =============================================================================
+// CURRENT TF DMI STATE
+// =============================================================================
+
+f_dmi_state(len) =>
+    up = high - high[1]
+    dn = low[1] - low
+    plusDM = (up > dn and up > 0) ? up : 0.0
+    minusDM = (dn > up and dn > 0) ? dn : 0.0
+    tr = math.max(high - low, math.max(math.abs(high - close[1]), math.abs(low - close[1])))
+    sP = ta.rma(plusDM, len)
+    sM = ta.rma(minusDM, len)
+    sT = ta.rma(tr, len)
+    pDI = sT == 0 ? 0.0 : 100.0 * sP / sT
+    mDI = sT == 0 ? 0.0 : 100.0 * sM / sT
+    dsum = pDI + mDI
+    dxv = dsum == 0 ? 0.0 : 100.0 * math.abs(pDI - mDI) / dsum
+    [ta.rma(dxv, len), sP, sM, dxv, pDI, mDI]
+
+[adxCur, sP, sM, dxCur, pDI, mDI] = f_dmi_state(dmiLen)
+
+aC = sP * (dmiLen - 1)
+bC = sM * (dmiLen - 1)
+upDom = pDI >= mDI
+
+D_up = adxCur + nPts * dmiLen
+D_dn = adxCur - nPts * dmiLen
+
+reqDM_up = D_up >= 100 ? na : upDom ? bC * (100 + D_up) / (100 - D_up) - aC : aC * (100 + D_up) / (100 - D_up) - bC
+
+reqDM_dn = D_dn < 0 ? na : upDom ? (aC * (100 - D_dn) - bC * (100 + D_dn)) / (100 + D_dn) : (bC * (100 - D_dn) - aC * (100 + D_dn)) / (100 + D_dn)
+
+lvl_up = na(reqDM_up) ? na : upDom ? high + reqDM_up : low - reqDM_up
+lvl_dn = na(reqDM_dn) ? na : upDom ? low - reqDM_dn : high + reqDM_dn
+
+f_move(lvl) => na(lvl) ? na : lvl - close
+
+f_pct(lvl) => na(lvl) ? na : (lvl - close) / close * 100.0
+
+f_leg(tag, lvl, impossible_msg) => na(lvl) ? tag + ": " + impossible_msg : tag + ": " + str.tostring(lvl, format.mintick) + " (" + (f_move(lvl) >= 0 ? "+" : "") + str.tostring(f_move(lvl), format.mintick) + ", " + (f_pct(lvl) >= 0 ? "+" : "") + str.tostring(f_pct(lvl), "#.##") + "%)"
+
+// =============================================================================
+// ADX BOWL SETTINGS
+// =============================================================================
+
+grpBowl = "ADX Bowl Detector"
+
+show_bowl = input.bool(true, "Show ADX Bowl", group=grpBowl)
+show_expansion = input.bool(true, "Show ADX Expansion", group=grpBowl)
+show_elephant = input.bool(true, "Show Elephant", group=grpBowl)
+show_exhaustion = input.bool(true, "Show ADX Exhaustion", group=grpBowl)
+show_bowl_bg = input.bool(true, "Show Bowl Background", group=grpBowl)
+show_elephant_bg = input.bool(true, "Show Elephant Background", group=grpBowl)
+
+bowl_norm_length = input.int(100, "ADX Normalization Lookback", minval=20, group=grpBowl)
+bowl_smooth = input.int(3, "ADX Slope Smoothing", minval=1, group=grpBowl)
+bowl_min_rise = input.float(1.0, "Minimum ADX Rise After Bowl", minval=0.1, step=0.1, group=grpBowl)
+bowl_min_slope = input.float(0.20, "Minimum ADX Slope", minval=0.01, step=0.05, group=grpBowl)
+expansion_adx = input.float(20.0, "Expansion ADX", minval=5, step=0.5, group=grpBowl)
+elephant_adx = input.float(23.0, "Elephant ADX", minval=5, step=0.5, group=grpBowl)
+bowl_max_adx = input.float(25.0, "Maximum ADX For New Bowl", minval=5, step=0.5, group=grpBowl)
+bowl_min_depth = input.float(0.08, "Minimum Bowl Depth", minval=0.01, step=0.01, group=grpBowl)
+pivot_short = input.int(2, "Short Pivot Length", minval=1, maxval=10, group=grpBowl)
+pivot_long = input.int(5, "Long Pivot Length", minval=2, maxval=15, group=grpBowl)
+
+use_di_filter = input.bool(true, "Use DI Direction Filter", group=grpBowl)
+di_difference = input.float(2.0, "Minimum DI Difference", minval=0, step=0.5, group=grpBowl)
+use_acceleration = input.bool(true, "Require ADX Acceleration", group=grpBowl)
+
+// =============================================================================
+// ADX SLOPE / ACCELERATION
+// =============================================================================
+
+adxSlopeRaw = ta.change(adxCur)
+adxSlope = ta.ema(adxSlopeRaw, bowl_smooth)
+adxAcceleration = ta.change(adxSlope)
+adxRising = adxCur > adxCur[1]
+adxFalling = adxCur < adxCur[1]
+adxRising2 = adxCur > adxCur[1] and adxCur[1] > adxCur[2]
+adxFalling2 = adxCur < adxCur[1] and adxCur[1] < adxCur[2]
+
+// =============================================================================
+// ROLLING ADX NORMALIZATION
+// =============================================================================
+
+adxLowest = ta.lowest(adxCur, bowl_norm_length)
+adxHighest = ta.highest(adxCur, bowl_norm_length)
+adxNorm = adxHighest != adxLowest ? (adxCur - adxLowest) / (adxHighest - adxLowest) : 0.5
+adxNorm := math.max(0.0, math.min(1.0, adxNorm))
+
+// =============================================================================
+// ADX PIVOT LOWS
+// =============================================================================
+
+// One ADX bowl is enough.
+// Direction is determined later by +DI / -DI.
+
+adxPivotLowShort = ta.pivotlow(adxNorm, pivot_short, pivot_short)
+adxPivotLowLong = ta.pivotlow(adxNorm, pivot_long, pivot_long)
+
+adxBullPivot = not na(adxPivotLowShort) ? adxPivotLowShort : not na(adxPivotLowLong) ? adxPivotLowLong : na
+
+bullPivotOffset = not na(adxPivotLowShort) ? pivot_short : pivot_long
+
+bullPivotADX = not na(adxBullPivot) ? adxCur[bullPivotOffset] : na
+
+bullDepth = not na(adxBullPivot) ? adxNorm - adxBullPivot : na
+
+bullPivotQuality = not na(adxBullPivot) and not na(bullPivotADX) and bullPivotADX <= bowl_max_adx and bullDepth >= bowl_min_depth
+
+// =============================================================================
+// DI DIRECTION
+// =============================================================================
+
+bullDI = pDI > mDI and (pDI - mDI) >= di_difference
+
+bearDI = mDI > pDI and (mDI - pDI) >= di_difference
+
+// =============================================================================
+// ONE ADX BOWL STATE
+// =============================================================================
+
+var bool adxBowlActive = false
+var float adxBowlStartADX = na
+var int adxBowlStartBar = na
+
+// =============================================================================
+// ACTIVATE ADX BOWL
+// =============================================================================
+
+if bullPivotQuality
+    adxBowlActive := true
+    adxBowlStartADX := bullPivotADX
+    adxBowlStartBar := bar_index - bullPivotOffset
+
+// =============================================================================
+// BOWL DIRECTION
+// =============================================================================
+
+bullBowlActive = adxBowlActive and bullDI
+
+bearBowlActive = adxBowlActive and bearDI
+
+// =============================================================================
+// ADX RISE FROM BOWL
+// =============================================================================
+
+adxRise = adxBowlActive and not na(adxBowlStartADX) ? adxCur - adxBowlStartADX : na
+
+bullRise = bullBowlActive ? adxRise : na
+
+bearRise = bearBowlActive ? adxRise : na
+
+// =============================================================================
+// EXPANSION
+// =============================================================================
+
+bullExpansion = bullBowlActive and bullRise >= bowl_min_rise and adxCur >= expansion_adx and adxSlope > 0 and (not use_di_filter or bullDI)
+bearExpansion = bearBowlActive and bearRise >= bowl_min_rise and adxCur >= expansion_adx and adxSlope > 0 and (not use_di_filter or bearDI)
+
+// ELEPHANT
+bullElephant = bullBowlActive and adxCur >= elephant_adx and adxRising2 and (not use_di_filter or bullDI)
+bearElephant = bearBowlActive and adxCur >= elephant_adx and adxRising2 and (not use_di_filter or bearDI)
+
+// =============================================================================
+// ADX PEAK / EXHAUSTION
+// =============================================================================
+
+adxPivotHighShort = ta.pivothigh(adxNorm, pivot_short, pivot_short)
+adxPivotHighLong = ta.pivothigh(adxNorm, pivot_long, pivot_long)
+
+adxPeak = not na(adxPivotHighShort) or not na(adxPivotHighLong)
+
+bullExhaustion = adxPeak and adxCur >= elephant_adx and adxFalling
+
+bearExhaustion = adxPeak and adxCur >= elephant_adx and adxFalling
+
+// =============================================================================
+// RESET BOWL
+// =============================================================================
+
+if adxBowlActive and adxPeak and adxCur >= elephant_adx
+    adxBowlActive := false
+
+if adxBowlActive and adxCur < adxBowlStartADX
+    adxBowlActive := false
+
+// =============================================================================
+// BOWL VISUAL
+// =============================================================================
+
+plotshape(show_bowl and bullPivotQuality ? 5 : na, title="ADX Bowl", location=location.absolute, style=shape.diamond, size=size.tiny, color=color.new(color.orange, 0), offset=-bullPivotOffset)
+
+// =============================================================================
+// EXPANSION VISUALS
+// =============================================================================
+
+plotshape(show_expansion and bullExpansion and not bullExpansion[1] ? 0 : na, title="Bullish ADX Expansion", location=location.absolute, style=shape.triangleup, size=size.tiny, color=color.new(color.lime, 0))
+
+plotshape(show_expansion and bearExpansion and not bearExpansion[1] ? 70 : na, title="Bearish ADX Expansion", location=location.absolute, style=shape.triangledown, size=size.tiny, color=color.new(color.red, 0))
+
+// =============================================================================
+// ELEPHANT VISUALS
+// =============================================================================
+
+plotshape(show_elephant and bullElephant and not bullElephant[1] ? -5 : na, title="BULL ELEPHANT", location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(color.green, 0), text="🐘", textcolor=color.white)
+
+plotshape(show_elephant and bearElephant and not bearElephant[1] ? 75 : na, title="RED ELEPHANT", location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.red, 0), text="🐘", textcolor=color.white)
+
+// =============================================================================
+// BACKGROUND
+// =============================================================================
+
+bullBowlColor = bullBowlActive ? color.new(color.yellow, 90) : na
+bearBowlColor = bearBowlActive ? color.new(color.orange, 92) : na
+elephantBullColor = bullElephant ? color.new(color.green, 88) : na
+elephantBearColor = bearElephant ? color.new(color.red, 88) : na
+
+bgcolor(show_bowl_bg ? bullBowlColor : na)
+bgcolor(show_bowl_bg ? bearBowlColor : na)
+bgcolor(show_elephant_bg ? elephantBullColor : na)
+bgcolor(show_elephant_bg ? elephantBearColor : na)
+
+// =============================================================================
+// ADX STATE COLOR
+// =============================================================================
+
+adxStateColor = bullElephant ? color.lime : bearElephant ? color.red : bullExpansion ? color.green : bearExpansion ? color.orange : bullBowlActive ? color.yellow : bearBowlActive ? color.orange : adxFalling ? color.gray : color.white
+
+plot(adxCur, title="Current TF ADX State", color=color.new(adxStateColor, 0), linewidth=3)
+
+// =============================================================================
+// SENSITIVITY LABEL
+// =============================================================================
+
+var label sensLbl = na
+
+if showSens and barstate.islast
+    label.delete(sensLbl)
+    string stateText = bullElephant ? "BULL ELEPHANT" : bearElephant ? "BEAR ELEPHANT" : bullExpansion ? "BULL EXPANSION" : bearExpansion ? "BEAR EXPANSION" : bullBowlActive ? "BULL BOWL" : bearBowlActive ? "BEAR BOWL" : adxFalling ? "ADX FALLING" : "ADX NEUTRAL"
+    string diText = pDI > mDI ? "+DI LEADS" : mDI > pDI ? "-DI LEADS" : "DI NEUTRAL"
+    string riseText = bullBowlActive ? "\nRise: +" + str.tostring(bullRise, "#.##") : bearBowlActive ? "\nRise: +" + str.tostring(bearRise, "#.##") : ""
+    string txt1 = tfName + " ADX " + str.tostring(adxCur, "#.##") + "\n" + stateText + "\n" + diText + riseText + "\nSlope: " + str.tostring(adxSlope, "#.##")
+    if isPlottedTF
+        nStr = str.tostring(nPts, "#.#")
+        txt = tfName + " ADX " + str.tostring(adxCur, "#.##") + " (DX now " + str.tostring(dxCur, "#.#") + ", " + (upDom ? "+DI" : "-DI") + " leads)\n" + "needs DX " + str.tostring(D_up, "#.#") + " to go +" + nStr + " | DX " + str.tostring(D_dn, "#.#") + " to go -" + nStr + "\n" + f_leg("ADX +" + nStr, lvl_up, "impossible in 1 bar (needs DX>100)") + "\n" + f_leg("ADX -" + nStr, lvl_dn, "impossible in 1 bar (ADX < " + str.tostring(nPts * dmiLen, "#") + ")")
+        sensLbl := label.new(bar_index + sensOffset, adxCur, txt, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_left, color=color.new(color.black, 15), textcolor=tfCol, size=size.small, textalign=text.align_left)
+    else
+        sensLbl := label.new(bar_index + sensOffset, adxCur, "chart TF (" + tfName + ") is not one of the plotted timeframes", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_left, color=color.new(color.black, 40), textcolor=color.gray, size=size.small, textalign=text.align_left)
+
+// =============================================================================
+// DEAD ZONE
+// =============================================================================
+
+fill(hline(0), hline(30), color=color.new(color.white, 90), title="Dead")
