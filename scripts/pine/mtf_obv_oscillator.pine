@@ -1,0 +1,230 @@
+//@version=5
+indicator("MTF OBV Oscillator", overlay=false)
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// INPUTS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+grp_obv = "OBV Settings"
+
+obv_length = input.int(300, "Normalization Lookback", minval=1, group=grp_obv)
+signal_len = input.int(9, "Signal EMA", minval=1, group=grp_obv)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TIMEFRAMES
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+grp = "Timeframes"
+
+en1 = input.bool(true, "Show TF1", inline="tf1", group=grp)
+tf1 = input.timeframe("5", "", inline="tf1", group=grp)
+
+en2 = input.bool(true, "Show TF2", inline="tf2", group=grp)
+tf2 = input.timeframe("15", "", inline="tf2", group=grp)
+
+en3 = input.bool(true, "Show TF3", inline="tf3", group=grp)
+tf3 = input.timeframe("30", "", inline="tf3", group=grp)
+
+en4 = input.bool(true, "Show TF4", inline="tf4", group=grp)
+tf4 = input.timeframe("60", "", inline="tf4", group=grp)
+
+en5 = input.bool(true, "Show TF5", inline="tf5", group=grp)
+tf5 = input.timeframe("120", "", inline="tf5", group=grp)
+
+en6 = input.bool(true, "Show TF6", inline="tf6", group=grp)
+tf6 = input.timeframe("240", "", inline="tf6", group=grp)
+
+en7 = input.bool(true, "Show TF7", inline="tf7", group=grp)
+tf7 = input.timeframe("D", "", inline="tf7", group=grp)
+
+en8 = input.bool(true, "Show TF8", inline="tf8", group=grp)
+tf8 = input.timeframe("W", "", inline="tf8", group=grp)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// OBV OSCILLATOR FUNCTION
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+f_obv() =>
+    obv_raw = ta.cum(math.sign(close - close[1]) * volume)
+
+    lo = ta.lowest(obv_raw, obv_length)
+    hi = ta.highest(obv_raw, obv_length)
+
+    denom = hi - lo
+
+    obv_norm = denom != 0 ? 2 * (obv_raw - lo) / denom - 1 : 0
+
+    sig = ta.ema(obv_norm, signal_len)
+
+    sig
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MULTI-TIMEFRAME OBV
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+obv_tf1 = request.security(
+     syminfo.tickerid,
+     tf1,
+     f_obv(),
+     lookahead=barmerge.lookahead_off)
+
+obv_tf2 = request.security(
+     syminfo.tickerid,
+     tf2,
+     f_obv(),
+     lookahead=barmerge.lookahead_off)
+
+obv_tf3 = request.security(
+     syminfo.tickerid,
+     tf3,
+     f_obv(),
+     lookahead=barmerge.lookahead_off)
+
+obv_tf4 = request.security(
+     syminfo.tickerid,
+     tf4,
+     f_obv(),
+     lookahead=barmerge.lookahead_off)
+
+obv_tf5 = request.security(
+     syminfo.tickerid,
+     tf5,
+     f_obv(),
+     lookahead=barmerge.lookahead_off)
+
+obv_tf6 = request.security(
+     syminfo.tickerid,
+     tf6,
+     f_obv(),
+     lookahead=barmerge.lookahead_off)
+
+obv_tf7 = request.security(
+     syminfo.tickerid,
+     tf7,
+     f_obv(),
+     lookahead=barmerge.lookahead_off)
+
+obv_tf8 = request.security(
+     syminfo.tickerid,
+     tf8,
+     f_obv(),
+     lookahead=barmerge.lookahead_off)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// COLORS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+c1 = #ffffff
+c2 = #00e5ff
+c3 = #26c6da
+c4 = #42a5f5
+c5 = #ab47bc
+c6 = #ffa726
+c7 = #ffee58
+c8 = #ef5350
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PLOTS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+plot(
+     en1 ? obv_tf1 : na,
+     "OBV Signal TF1",
+     color=color.new(c1, 20),
+     linewidth=1)
+
+plot(
+     en2 ? obv_tf2 : na,
+     "OBV Signal TF2",
+     color=color.new(c2, 20),
+     linewidth=1)
+
+plot(
+     en3 ? obv_tf3 : na,
+     "OBV Signal TF3",
+     color=color.new(c3, 20),
+     linewidth=2)
+
+plot(
+     en4 ? obv_tf4 : na,
+     "OBV Signal TF4",
+     color=color.new(c4, 20),
+     linewidth=2)
+
+plot(
+     en5 ? obv_tf5 : na,
+     "OBV Signal TF5",
+     color=color.new(c5, 20),
+     linewidth=2)
+
+plot(
+     en6 ? obv_tf6 : na,
+     "OBV Signal TF6",
+     color=color.new(c6, 20),
+     linewidth=2)
+
+plot(
+     en7 ? obv_tf7 : na,
+     "OBV Signal TF7",
+     color=color.new(c7, 20),
+     linewidth=3)
+
+plot(
+     en8 ? obv_tf8 : na,
+     "OBV Signal TF8",
+     color=color.new(c8, 20),
+     linewidth=3)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// REFERENCE LEVELS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+hline(
+     0.5,
+     "Overbought",
+     color=color.gray,
+     linestyle=hline.style_dashed)
+
+hline(
+     -0.5,
+     "Oversold",
+     color=color.gray,
+     linestyle=hline.style_dashed)
+
+hline(
+     0,
+     "Zero",
+     color=color.gray)
+
+hline(
+     1,
+     "Upper",
+     color=color.gray)
+
+hline(
+     -1,
+     "Lower",
+     color=color.gray)
+
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// WATERMARK
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var table wm = table.new(position.bottom_right, 1, 1)
+
+if barstate.islast
+    table.cell(
+         wm,
+         0,
+         0,
+         "MTF OBV",
+         text_size=size.huge,
+         text_color=color.new(color.gray, 65),
+         bgcolor=color.new(color.black, 100))

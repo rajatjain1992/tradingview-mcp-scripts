@@ -1,0 +1,523 @@
+//@version=5
+indicator("Multi-Mode Indicator", overlay=true, precision=3,max_labels_count=500,max_bars_back = 5000)
+G_DAY  = "Day Variables"
+G_VWAP = "VWAP Settings"
+O_EMA = "Optional EMA"
+// ═══════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════
+emacombo       = input.string("Yes", "Show EMA Combo",      options=["Yes", "No"], display=display.none)
+Bollinger_band = input.string("No",  "Show Bollinger band", options=["Yes", "No"], display=display.none)
+showShapes     = input.string("No",  "Show Shapes?",        options=["Yes", "No"], display=display.none)
+showMidpoint     = input.string("No",  "Show Midpoint?",        options=["Yes", "No"], display=display.none)
+showDayVar = input.bool(true, "Show Day Variables",group=G_DAY)
+showTable = input.bool(false, "Show Tables")
+
+length     = input.int(30,    "Lookback Period",    group=G_DAY, minval=1,display = display.none)
+high_low_diff     = input.int(50,    "high_low_diff in LookbackPeriod",    group=G_DAY, minval=1,display = display.none)
+
+// Fix #3 & #11: bbLen and multiplier now wired into BB calculation
+//Bollinger_band = input.string("ema_5",  "Show Bollinger band", options=["ema_5", "ema_20"], display=display.none)
+bbLen      = input.int(20,   "BB Length",     minval=5,   group="Bollinger Band",display = display.none)
+multiplier = input.float(2.0,"BB Multiplier", step=0.1, minval=0.5, group="Bollinger Band",display = display.none)
+
+showOptionalEMA = input.bool(false, "Show Optional EMA",group=O_EMA)
+optional_ema_1      = input.int(9,   "O-EMA1",     minval=1,group=O_EMA,display = display.none)
+optional_ema_2      = input.int(15,   "O-EMA2",     minval=1,group=O_EMA,display = display.none)
+
+hideonDWM  = input.bool(false, "Hide VWAP on 1D or Above", group=G_VWAP, display=display.data_window)
+anchor     = input.string("Session", "Anchor Period", group=G_VWAP,
+             options=["Session","Week","Month","Quarter","Year","Decade","Century"])
+src        = input.source(hlc3, "Source", group=G_VWAP, display=display.data_window,display = display.none)
+vwapOffset = input.int(0, "Offset", group=G_VWAP, minval=0, display=display.data_window,display = display.none)
+showVwap   = input.bool(false, "Show VWAP", group=G_VWAP)
+
+// Fix #13: ADX thresholds exposed as inputs
+adx_entry_min       = input.int(14, "ADX Entry Min",          minval=5,  maxval=40, group="ADX Settings",display = display.none)
+adx_entry_max       = input.int(30, "ADX Entry Max",          minval=10, maxval=60, group="ADX Settings",display = display.none)
+
+// ═══════════════════════════════════════════════════════════
+// FLAGS
+// ═══════════════════════════════════════════════════════════
+show_combo          = emacombo == "Yes"
+Show_Bollinger_band = Bollinger_band == "Yes"
+Show_Shapes         = showShapes == "Yes"
+is_last_bar         = bar_index == ta.highest(bar_index, 1)
+
+// ═══════════════════════════════════════════════════════════
+// CORE CALCULATIONS
+// ═══════════════════════════════════════════════════════════
+oema1 = ta.ema(close, optional_ema_1)
+oema2 = ta.ema(close, optional_ema_2)
+// plot(showOptionalEMA ? oema1 : na, "EMA 200", color=color.lime,    linewidth=2)
+// plot(showOptionalEMA ? oema2 : na, "EMA 200", color=color.fuchsia,    linewidth=2)
+
+
+
+
+// --- ADX ---
+[diPlus, diMinus, adx] = ta.dmi(14, 14)
+
+// --- ATR ---
+atr_val  = ta.atr(14)
+lt_atr   = ta.atr(375)
+tr_ratio = (high - low) / lt_atr
+
+// --- Price (OHLC4) ---
+price = (open + high + close + low) / 4
+
+// --- EMAs ---
+ema_5   = ta.ema(close, 5)
+ema_9   = ta.ema(close, 9)
+ema_20  = ta.ema(close, 20)
+ema_50  = ta.ema(close, 50)
+ema_100 = ta.ema(close, 100)
+ema_200 = ta.ema(close, 200)
+
+ema_max = math.max(math.max(ema_20, ema_50), math.max(ema_100, ema_200))
+ema_min = math.min(math.min(ema_20, ema_50), math.min(ema_100, ema_200))
+
+// --- EMA 5/9 cross condition ---
+ema_59_condition = ta.crossover(ema_5, ema_9) ? 1 : ta.crossunder(ema_5, ema_9) ? -1 : 0
+
+// --- Nearest EMA to EMA20 (among 50/100/200) ---
+dist_50  = math.abs(ema_20 - ema_50)
+dist_100 = math.abs(ema_20 - ema_100)
+dist_200 = math.abs(ema_20 - ema_200)
+
+var series float nearest_ema = na
+nearest_ema := (dist_50 <= dist_100 and dist_50 <= dist_200) ? ema_50 : (dist_100 <= dist_50 and dist_100 <= dist_200) ? ema_100 : ema_200
+
+next_price        = math.max((21 * nearest_ema - 19 * ema_20) / 2, 0)
+change_for_ema_20 = next_price - close
+
+// --- Price required for EMA 5/9 crossover ---
+alphaFast     = 2.0 / 6
+alphaSlow     = 2.0 / 10
+emaFastPrev   = ema_5[1]
+emaSlowPrev   = ema_9[1]
+numerator     = emaSlowPrev - emaFastPrev + (alphaFast * emaFastPrev) - (alphaSlow * emaSlowPrev)
+denominator   = alphaFast - alphaSlow
+priceForCross  = denominator != 0 ? numerator / denominator : na
+pointsRequired = priceForCross - close
+
+// ═══════════════════════════════════════════════════════════
+// BOLLINGER BAND (on EMA 20)
+// Fix #3: bb_dev now uses bbLen and multiplier inputs
+// ═══════════════════════════════════════════════════════════
+bb_basis  = ema_20
+bb_dev    = multiplier * ta.stdev(ema_20, bbLen)
+bb_upper  = bb_basis + bb_dev
+bb_lower  = bb_basis - bb_dev
+bandwidth = bb_upper - bb_lower
+
+bb_up     = bandwidth >= bandwidth[1]
+bb_l_up   = bb_lower > bb_lower[1]
+bb_l_down = bb_lower < bb_lower[1]
+bb_u_up   = bb_upper > bb_upper[1]
+bb_u_down = bb_upper < bb_upper[1]
+
+// Note: bb_l_up + bb_u_up + not bb_up IS reachable — lower can rise faster than upper,
+// causing both bands to move up while width contracts. Logic is correct as written.
+bandColor =
+     bb_l_up   and bb_u_up   and bb_up     ? color.new(color.green,   50) :
+     bb_l_up   and bb_u_up   and not bb_up ? color.new(color.green,   80) :
+     bb_l_down and bb_u_down and bb_up     ? color.new(color.red,     80) :
+     bb_l_down and bb_u_down and not bb_up ? color.new(color.red,     50) :
+     bb_l_up   and bb_u_down              ? color.new(color.fuchsia, 80) :
+     bb_l_down and bb_u_up               ? color.new(color.aqua,    80) : na
+
+ema_in_band = ema_max <= bb_upper and ema_min >= bb_lower
+
+// ═══════════════════════════════════════════════════════════
+// MOMENTUM
+// ═══════════════════════════════════════════════════════════
+calc_momentum(src, n, lookback, smoothLen) =>
+    mom    = src - src[n]
+    maxMom = ta.highest(mom, lookback)
+    minMom = ta.lowest(mom, lookback)
+    norm   = (maxMom != minMom) ? (mom - minMom) / (maxMom - minMom) * 2 - 1 : 0
+    ta.ema(norm, smoothLen)
+
+momentum     = calc_momentum(price, 5, 60, 9)
+momentum_out = momentum < momentum[1] and momentum[1] < momentum[2] and momentum > 0.5
+
+// ═══════════════════════════════════════════════════════════
+// BB STRATEGY (Entry / Exit)
+// Fix #13: ADX thresholds now use inputs
+// ═══════════════════════════════════════════════════════════
+bb_adx_ok = adx > adx_entry_min and adx < adx_entry_max
+
+h           = hour(time, "Asia/Kolkata")
+m           = minute(time, "Asia/Kolkata")
+in_time     = (h > 9 or (h == 9 and m >= 30)) and (h < 15 or (h == 15 and m <= 2))
+allow_trade = in_time and bb_adx_ok
+
+isFuchsia = bandColor == color.new(color.fuchsia, 80)
+isGreen   = bandColor == color.new(color.green,   50) or bandColor == color.new(color.green, 80)
+isRed     = bandColor == color.new(color.red,     50) or bandColor == color.new(color.red,   80)
+
+wasFuchsia   = isFuchsia[1]
+lowest_prev3 = ta.lowest(low[1], 3)
+max_sl       = math.max(lowest_prev3, ema_20)
+
+longEntry  = wasFuchsia and isGreen and allow_trade and not ema_in_band and momentum > 0
+shortEntry = wasFuchsia and isRed   and allow_trade and not ema_in_band and momentum < 0
+
+var int lastTrade = 0
+if longEntry
+    lastTrade := 1
+else if shortEntry
+    lastTrade := -1
+
+// Fix #2: closeLong / closeShort kept — now used by alert conditions below
+closeLong  = lastTrade ==  1 and (isRed    or isFuchsia or low < max_sl or momentum_out)
+closeShort = lastTrade == -1 and (isGreen  or isFuchsia or low > max_sl or momentum_out)
+
+// ═══════════════════════════════════════════════════════════
+// CANDLE ANALYSIS
+// ═══════════════════════════════════════════════════════════
+
+calc_wick_perc() =>
+    rang1            = high - low
+    top_wick         = high - math.max(open, close)
+    bottom_wick      = math.min(open, close) - low
+    top_wick_perc    = rang1 > 0 ? (top_wick    / rang1) * 100 : 0
+    bottom_wick_perc = rang1 > 0 ? (bottom_wick / rang1) * 100 : 0
+    [top_wick_perc, bottom_wick_perc]
+
+[top_perc, bottom_perc] = calc_wick_perc()
+
+long_bottom = bottom_perc > 80 and (high - low) > atr_val
+long_top    = top_perc    > 80 and (high - low) > atr_val
+
+// --- Previous candle overlap (<= 30%) ---
+overlap_high    = math.min(high, high[1])
+overlap_low     = math.max(low,  low[1])
+overlap_range   = math.max(0, overlap_high - overlap_low)
+curr_range      = high - low
+overlap_percent = curr_range > 0 ? overlap_range / curr_range : 0
+is_overlap_50   = overlap_percent <= 0.3
+
+// Fix #14: ema_200 now included in all-EMA cover check
+highestEMA    = math.max(math.max(math.max(ema_5, ema_9), math.max(ema_20, ema_50)), math.max(ema_100, ema_200))
+lowestEMA     = math.min(math.min(math.min(ema_5, ema_9), math.min(ema_20, ema_50)), math.min(ema_100, ema_200))
+coversAllEMAs = high >= highestEMA and low <= lowestEMA
+
+// --- Body engulf box ---
+maxLookback = 8
+minEngulf   = 3
+
+int bodyEngulfCount = 0
+for i = 1 to maxLookback
+    prevBodyHigh = math.max(open[i], close[i])
+    prevBodyLow  = math.min(open[i], close[i])
+    if math.max(open+atr_val*0.2, close+atr_val*0.2) >= prevBodyHigh and math.min(open-atr_val*0.2, close-atr_val*0.2) <= prevBodyLow
+        bodyEngulfCount += 1
+    else
+        break
+
+if bodyEngulfCount >= minEngulf and volume > ta.sma(volume, 20)
+    box.new(bar_index - bodyEngulfCount, high, bar_index, low,
+     bgcolor=color.new(color.white, 100), border_color=color.new(color.white, 0))
+
+// ═══════════════════════════════════════════════════════════
+// PLOTS
+// ═══════════════════════════════════════════════════════════
+
+// Fix #9: moved from display.price_scale to display.status_line
+plot(ema_59_condition, "EMA 5-9 Condition", display=display.status_line, color=color.new(color.white, 90))
+
+// --- EMA 5 / 9 ribbon ---
+color_59 = ema_5 < ema_9 ? color.new(color.fuchsia, 40) :
+           ema_5 > ema_9 ? color.new(color.teal,    40) : color.new(color.white, 70)
+
+p59a = plot(ema_5, "EMA 5", color=color.white, linewidth=2, display=display.status_line)
+p59b = plot(ema_9, "EMA 9", color=color.red,   linewidth=2, display=display.status_line)
+fill(p59a, p59b, color=show_combo ? color_59 : na, title="EMA 5/9 Fill")
+
+// --- EMA Combo ---
+plot(show_combo ? ema_20  : na, "EMA 20",  color=color.new(color.yellow,50), linewidth=2)
+plot(show_combo ? ema_50  : na, "EMA 50",  color=color.new(color.orange,50), linewidth=2)
+plot(show_combo ? ema_100 : na, "EMA 100", color=color.new(color.blue,50),   linewidth=2)
+plot(show_combo ? ema_200 : na, "EMA 200", color=color.new(color.red,50),    linewidth=2)
+
+
+
+// --- Bollinger Band ---
+p1 = plot(Show_Bollinger_band ? bb_upper : na, "BB Upper", color=color.new(color.white, 85))
+p2 = plot(Show_Bollinger_band ? bb_lower : na, "BB Lower", color=color.new(color.white, 85))
+fill(p1, p2, color=bandColor, title="BB Fill")
+
+// --- Bar color ---
+barcolor(coversAllEMAs ? color.yellow : na)
+plotshape(long_bottom, "Long Bottom Wick",shape.labelup,   location.belowbar, color.new(color.green, 90), size=size.small, text="^", textcolor=color.green)
+plotshape(long_top , "Long Top Wick",shape.labeldown, location.abovebar, color.new(color.red,   90), size=size.small, text="v", textcolor=color.red)
+plotshape(is_overlap_50 and Show_Shapes, "Low Overlap",shape.circle, location.belowbar, color.orange, size=size.tiny)
+
+is_close_window = (hour == 15 and minute >= 0 and minute < 30) or (hour == 15 and minute == 30 and second == 0)
+var float cv_sum = 0.0
+var float v_sum = 0.0
+if is_close_window
+    cv_sum := cv_sum + hlc3 * volume
+    v_sum := v_sum + volume
+close_vwap = cv_sum / v_sum
+
+if ta.change(dayofweek)
+    cv_sum := 0.0
+    v_sum := 0.0
+
+
+
+// =============================================================================
+// DAY VARIABLES
+// =============================================================================
+show_intraday = timeframe.isintraday
+
+var float dayHigh = na
+var float dayLow  = na
+var float dayOpen = na
+
+if show_intraday
+    if ta.change(time("D"))
+        dayHigh := high
+        dayLow  := low
+        dayOpen := open
+    else
+        dayHigh := math.max(dayHigh, high)
+        dayLow  := math.min(dayLow,  low)
+
+day50    = (dayHigh + dayLow) / 2
+high_30m = ta.highest(high, length)
+low_30m  = ta.lowest(low,  length)
+
+high_5m = ta.highest(high, 5)
+low_5m  = ta.lowest(low,  5)
+
+
+var float first15High = na
+var float first15Low  = na
+
+newDay = ta.change(time("D"))
+
+if newDay
+    first15High := na
+    first15Low  := na
+
+mins_from_open = (hour * 60 + minute) - (9 * 60 + 15)
+
+// Build range during first 15 minutes
+if mins_from_open >= 0 and mins_from_open < 15
+    first15High := na(first15High) ? high : math.max(first15High, high)
+    first15Low  := na(first15Low)  ? low  : math.min(first15Low, low)
+
+// Plot after range is complete
+pHigh15 = plot(mins_from_open >= 15  ? first15High : na,"First 15 High",color=color.new(color.green, 0),linewidth=2, display = display.none)
+pLow15 = plot(mins_from_open >= 15 ? first15Low : na,"First 15 Low",color=color.new(color.red, 0),linewidth=2, display = display.none)
+fill(pHigh15, pLow15,color=show_intraday and showDayVar ? color.new(color.white, 96) : na,title="First 15 Min Range")
+
+
+
+plot(show_intraday and showDayVar ? dayHigh  : na, "Today's High",  color=color.new(color.lime,50), linewidth=2)
+plot(show_intraday and showDayVar ? dayLow   : na, "Today's Low",   color=color.new(color.red,50),  linewidth=2)
+plot(show_intraday and showDayVar ? dayOpen  : na, "Today's Open",  color=color.new(color.gray,50), linewidth=2)
+plot(show_intraday and showDayVar ? day50    : na, "50% of Today",  color=color.new(color.aqua,50), linewidth=2)
+
+plot(show_intraday and showDayVar ? high_30m : na, "Highest High (Last N)", color=color.new(color.red,50), linewidth=1, style=plot.style_stepline)
+plot(show_intraday and showDayVar ? low_30m  : na, "Lowest Low (Last N)",   color=color.new(color.green,50), linewidth=1, style=plot.style_stepline)
+
+//plot(show_intraday and showDayVar ? high_5m : na, "Highest High (Last 5)", color=color.new(color.fuchsia,50), linewidth=1, style=plot.style_stepline)
+//plot(show_intraday and showDayVar ? low_5m : na, "Lowest Low (Last 5)",   color=color.new(color.lime,50), linewidth=1, style=plot.style_stepline)
+mid_5m = (high_5m+low_5m)/2
+mid_30m = (high_30m+low_30m)/2
+// plot(show_intraday and showDayVar ? mid_5m : na, "5Point Mid", color=color.new(#00897b, 10), linewidth=1, style=plot.style_linebr)
+// plot(show_intraday and showDayVar ? mid_30m : na, "30Point Mid",   color=color.new(color.olive, 10), linewidth=1, style=plot.style_line)
+
+mid_cross_color = ta.crossover(mid_5m,mid_30m) ? color.aqua : ta.crossunder(mid_5m,mid_30m) ? color.fuchsia : color.gray
+plotshape(show_intraday and showDayVar ? ta.cross(mid_5m,mid_30m) : na ,style=shape.xcross,location=location.abovebar,color=mid_cross_color,size=size.tiny)
+
+high_flat = ta.highest(high_5m, 5) == ta.lowest(high_5m, 5)
+low_flat  = ta.highest(low_5m, 5)  == ta.lowest(low_5m, 5)
+
+// plotshape(show_intraday and showDayVar ? high_flat : na ,style=shape.triangledown,location=location.abovebar,color=color.red,size=size.tiny)
+// plotshape(show_intraday and showDayVar ? low_flat : na ,style=shape.triangleup,location=location.belowbar,color=color.green,size=size.tiny)
+
+//bgcolor(show_intraday and (high_30m - low_30m) <= high_low_diff ? color.new(color.yellow,90) : na)
+
+// =============================================================================
+// VWAP
+// Earnings/Dividends/Splits anchors removed (saved 3 securities toward limit)
+// =============================================================================
+isNewPeriod = switch anchor
+    "Session"   => timeframe.change("D")
+    "Week"      => timeframe.change("W")
+    "Month"     => timeframe.change("M")
+    "Quarter"   => timeframe.change("3M")
+    "Year"      => timeframe.change("12M")
+    "Decade"    => timeframe.change("12M") and year % 10  == 0
+    "Century"   => timeframe.change("12M") and year % 100 == 0
+    => false
+
+if na(src[1])
+    isNewPeriod := true
+
+float vwapValue = na
+if not (hideonDWM and timeframe.isdwm)
+    [_vwap, _, _] = ta.vwap(src, isNewPeriod, 1)
+    vwapValue := _vwap
+
+plot(showVwap or showDayVar and show_intraday ? vwapValue : na, "VWAP",
+     color=color.new(color.white, 60), offset=vwapOffset, linewidth=2)
+
+
+
+// Reference candle (t-2)
+high_t2 = high[2]
+low_t2  = low[2]
+
+// Condition: No candle breaks high of t-2
+no_high_break = high <= high_t2 and high[1] <= high_t2 and high[2] <= high_t2 and (ema_5>ema_9)
+no_low_break = low >= low_t2 and low[1] >= low_t2 and low[2] >= low_t2 and (ema_5<ema_9)
+
+// Plot horizontal levels
+plot_high = no_high_break ? high_t2 : na 
+plot_low  = no_low_break  ? low_t2  : na 
+
+
+plotshape(plot_high and Show_Shapes, "Low Overlap",shape.arrowdown, location.abovebar, color.red, size=size.tiny)
+plotshape(plot_low and Show_Shapes, "Low Overlap",shape.arrowup, location.belowbar, color.green, size=size.tiny)
+
+// ── 200 EMA baselines for volume and ATR ─────────────────
+ema_vol_200 = ta.ema(volume,   200)
+ema_atr_200 = ta.ema(atr_val,  200)
+
+// High-volume / low-volatility absorption candle
+absorption = volume > 1.3 * ema_vol_200 and atr_val < 0.8 * ema_atr_200
+
+
+plotshape(absorption and Show_Shapes, "Absorption",shape.diamond, location.belowbar,color.new(color.yellow, 30), size=size.small,text="A", textcolor=color.yellow)
+
+
+mid = (high + low) / 2
+show_tf = timeframe.in_seconds() >= timeframe.in_seconds("15")
+
+plot(show_tf and showMidpoint=="Yes" ? mid : na,style = plot.style_circles,color = color.yellow,linewidth = 1,display = display.pane)
+
+
+
+show_labels = input.bool(true, "Show ATH Bucket Labels")
+is_daily_tf = timeframe.period == "D" 
+get_bucket_tf(d) => d <= 1 ? "1m" : d <= 2 ? "3m" : d <= 3 ? "5m" : d <= 5 ? "15m" : d <= 14 ? "30m" : d <= 30 ? "1H" : d <= 60 ? "2H" : d <= 90 ? "3H" : d <= 120 ? "4H" : d <= 300 ? "D" : d <= 1095 ? "W" : d <= 6205 ? "M" : "3M"
+get_duration_str(d) => d > 366 ? str.tostring(math.round(d / 365.25, 1)) + "y" : d > 30 ? str.tostring(math.round(d / 30.0, 1)) + "mo" : str.tostring(d) + "d"
+
+var float true_ath = na
+var int ath_time = na
+if na(true_ath) or high > true_ath
+    true_ath := high
+    ath_time := time
+days_from_ath = math.floor((time - ath_time) / 86400000)
+bucket_tf = get_bucket_tf(days_from_ath)
+var string prev_bucket = na
+var label last_lbl = na
+text_label = barstate.islast ? bucket_tf + " | " + get_duration_str(days_from_ath) : bucket_tf
+if show_labels and is_daily_tf and (bucket_tf != prev_bucket or barstate.islast)
+    label.new(bar_index, low - ta.atr(14) * 0.5, text=text_label , style=label.style_label_up, color=color.new(color.blue, 60), textcolor=color.white, size=size.small)
+    prev_bucket := bucket_tf
+
+
+var int streak = 0 
+ema200 = ta.ema(close, 200) 
+ema_inside = (ema200 >= low and ema200 <= high) and  (ema200[1] >= low[1] and ema200[1] <= high[1]) and (ema200[2] >= low[2] and ema200[2] <= high[2]) and (ema200[3] >= low[3] and ema200[4] <= high[4])
+
+ema_stack = ema_200>ema_20 and ema_20>ema_100 and ema_100>ema_50
+candle_position = high<ema_50 and high[1]<ema_50[1] and high[2]<=ema_50[2]
+match = ema_stack and candle_position
+
+
+
+
+
+
+hasFullEMA = true
+for i = 0 to 299
+    if na(ema_200[i])
+        hasFullEMA := false
+
+
+
+// ************* Consolidation Marking ***************** //////////////////////////
+
+all_ema_available = hasFullEMA
+
+// ***********************  EMA Spread and Price to EMA Calculation ***********************
+ema_spread_percent = math.round(ta.ema(((ema_max - ema_min) / ema_min) * 100,5),3)
+price_spread_percent = math.round(ta.ema(((close - ema_200)/ema_200) *100,5),3)
+
+// === Percentile Helper Function ===
+percentile_rank(src, length) =>
+    count = 0
+    for i = 0 to length - 1
+        count += src[i] <= src ? 1 : 0
+    100 * count / length
+
+
+lookback_len = input.int(500,"Lookback Length",minval=5,display = display.none)
+
+// EMA Spread % Percentile
+ema_spread_percentile = percentile_rank(ema_spread_percent, lookback_len)
+
+use_abs = true  // Set false if you want signed percentile
+price_spread_input = use_abs ? math.abs(price_spread_percent) : price_spread_percent
+price_to_ema200_percentile = percentile_rank(price_spread_input, lookback_len)
+very_high_low = ema_spread_percentile>85  and price_to_ema200_percentile>90
+plotshape(very_high_low and low > ema_200 and all_ema_available, style=shape.triangledown, location=location.abovebar, color=color.new(color.fuchsia,70), size=size.tiny, title="Ready to Fall")
+plotshape(very_high_low and high < ema_200 and all_ema_available, style=shape.triangleup, location=location.belowbar, color=color.new(color.aqua,70), size=size.tiny, title="Ready to Fly")
+
+too_much_consolidation = ema_spread_percentile<15  and (price_to_ema200_percentile<5 or (close< ema_max and close> ema_min))
+// plotshape(too_much_consolidation and all_ema_available, style=shape.square, location=location.belowbar, color=color.new(color.yellow,50), size=size.tiny, title="Tight Consolidation")
+
+max_price_spread = ta.highest(price_spread_input, lookback_len)
+current_price_spread = math.abs(close - ema_200) / ema_200 * 100
+price_spread_to_100p = (max_price_spread - current_price_spread)*ema_200/100
+
+fut_sym = syminfo.prefix + ":" + syminfo.ticker + "1!" 
+fut_data = request.security(fut_sym, timeframe.period, close, ignore_invalid_symbol=true) 
+has_fo = not na(fut_data) 
+// var lbl = label.new(na, na, "", style=label.style_label_lower_right, size=size.normal, textcolor=color.white) 
+// if barstate.islast 
+//     label.set_xy(lbl, bar_index, high) 
+//     label.set_text(lbl, has_fo ? "✅ F&O Available\n" + fut_sym : "❌ No F&O\n" + fut_sym) 
+//     label.set_color(lbl, has_fo ? color.new(color.green, 20) : color.new(color.red, 20))
+
+labelText =
+     "EMA20=>NEMA: " + str.tostring(change_for_ema_20, "#.##") + " || " +
+     "EMA5-9 flip = "  + str.tostring(pointsRequired, format.mintick) + "\n" +
+     "F&O Available: " + (has_fo ? "✅" + fut_sym : "❌ No F&O") + "\n" +
+     "EMA Spread: " + str.tostring(ema_spread_percent, "#.##") + "% [" + str.tostring(ema_spread_percentile, "#.0") + "p]" + " \n" +
+     "Runway for 100P P/EMA: " + str.tostring(price_spread_to_100p,"#.##"),
+
+var label infoLabel = na
+if is_last_bar
+    if not na(infoLabel)
+        label.delete(infoLabel)
+    infoLabel := label.new(
+     x         = bar_index + 25,
+     y         = close + atr_val / 2,
+     text      = labelText,
+     style     = label.style_label_upper_left,
+     textcolor = color.black,
+     color     = color.new(color.white, 40),
+     size      = size.normal)
+
+price_cond = high<high[1] and high[1]<high[2] and high[2]<high[3] and high[3]<high[4] and high[4]<high[5] 
+ema_cond = ema_200>ema_20 and ema_20>ema_100 and ema_100>ema_50
+cond = price_cond and ema_cond
+//(vD < 1 and vD>-2) and (vW>-1 and vW<1) 
+//and (v240>0 and v240<30) and (v120>77) and (v60>85) and (v30>80 and v30<90))
+var int totalCount = 0
+if cond
+    totalCount += 1
+bgcolor(cond ? color.new(color.yellow,80 ) : na)
+if barstate.islast
+    label.new(bar_index, close - 10, "Matches (5000 bars): " + str.tostring(totalCount), style=label.style_label_down, color=color.orange)
+

@@ -1,0 +1,121 @@
+//@version=5
+// ══════════════════════════════════════════════════════════════════════
+// ADX RAD V2  +  RSI Combo Strategy
+// Original indicator code preserved intact.
+// Strategy logic added at the bottom — entries/exits based on the
+// exact rsi_diff / rsi_diff2 color states already plotted.
+// ══════════════════════════════════════════════════════════════════════
+indicator("MTF RSI Bees to Elephant", overlay=false)
+
+grp = "Timeframes"
+
+en1 = input.bool(true,  "Show TF1", inline="tf1", group=grp)
+tf1 = input.timeframe("5",   "",  inline="tf1", group=grp)
+
+en2 = input.bool(true,  "Show TF2", inline="tf2", group=grp)
+tf2 = input.timeframe("15",  "",  inline="tf2", group=grp)
+
+en3 = input.bool(true,  "Show TF3", inline="tf3", group=grp)
+tf3 = input.timeframe("30",  "",  inline="tf3", group=grp)
+
+en4 = input.bool(true,  "Show TF4", inline="tf4", group=grp)
+tf4 = input.timeframe("60",  "",  inline="tf4", group=grp)
+
+en5 = input.bool(true,  "Show TF5", inline="tf5", group=grp)
+tf5 = input.timeframe("120", "",  inline="tf5", group=grp)
+
+en6 = input.bool(true,  "Show TF6", inline="tf6", group=grp)
+tf6 = input.timeframe("240", "",  inline="tf6", group=grp)
+
+en7 = input.bool(true,  "Show TF7", inline="tf7", group=grp)
+tf7 = input.timeframe("D",   "",  inline="tf7", group=grp)
+
+en8 = input.bool(true,  "Show TF8", inline="tf8", group=grp)
+tf8 = input.timeframe("W",   "",  inline="tf8", group=grp)
+
+en9 = input.bool(true,  "Show TF8", inline="tf0", group=grp)
+tf9 = input.timeframe("M",   "",  inline="tf9", group=grp)
+
+showDist = input.bool(false, "Show Distance Areas", group="Display")
+
+showAgg = input.bool(true, "Show aggregate (mean) line", group="Display")
+showTbl = input.bool(true, "Show table", group="Display")
+
+userange   = input.bool(true, "Range",    inline="t3", group="Timeframes")
+
+
+dmiLen = input.int(8, "ADX / DMI Length")
+rsiLen = input.int(8, "RSI Length")
+DiffInput = input.int(12, "DI Difference Limit")
+adx_floor = input.float(20, "ADX Floor")
+trend_adx = input.float(23, "MTF Trend Min ADX")
+
+chartTfSec = timeframe.in_seconds(timeframe.period)
+
+show1 = en1 and chartTfSec <= timeframe.in_seconds(tf1)
+show2 = en2 and chartTfSec <= timeframe.in_seconds(tf2)
+show3 = en3 and chartTfSec <= timeframe.in_seconds(tf3)
+show4 = en4 and chartTfSec <= timeframe.in_seconds(tf4)
+show5 = en5 and chartTfSec <= timeframe.in_seconds(tf5)
+show6 = en6 and chartTfSec <= timeframe.in_seconds(tf6)
+show7 = en7 and chartTfSec <= timeframe.in_seconds(tf7)
+show8 = en8 and chartTfSec <= timeframe.in_seconds(tf8)
+show9 = en9 and chartTfSec <= timeframe.in_seconds(tf9)
+
+
+f_calc() =>
+    rsi2_local = ta.ema(ta.rsi(close, rsiLen),8)
+    [p5, m5, adx_local] = ta.dmi(dmiLen, dmiLen)
+    [rsi2_local,adx_local]
+
+
+[rsi5,adx5]     = request.security(syminfo.tickerid, tf1,   f_calc())
+[rsi15,adx15]   = request.security(syminfo.tickerid, tf2,  f_calc())
+[rsi30,adx30]   = request.security(syminfo.tickerid, tf3,  f_calc())
+[rsi60,adx60]   = request.security(syminfo.tickerid, tf4,  f_calc())
+[rsi120,adx120] = request.security(syminfo.tickerid, tf5, f_calc())
+[rsi240,adx240] = request.security(syminfo.tickerid, tf6, f_calc())
+[rsiD,adxD]     = request.security(syminfo.tickerid, tf7,   f_calc())
+[rsiW,adxW]     = request.security(syminfo.tickerid, tf8,   f_calc())
+[rsiM,adxM]     = request.security(syminfo.tickerid, tf9,   f_calc())
+
+
+// ============================ Colors (shared by lines + table legend) ============================
+c5   = #ffffff   // 5m  — bright white (starker)
+c15  = #00e5ff   // 15m — electric cyan (starker)
+c30  = #26c6da   // 30m
+c60  = #42a5f5   // 60m
+c120 = #ab47bc   // 120m
+c240 = #ffa726   // 240m
+cD   = #ffee58   // D
+cW   = #ef5350   // W
+cM   = #ffffff  // W
+cRange = #faf4f4
+
+// ============================ Directional lines ============================
+plot(show1   ? rsi5   : na, "5m",   color=color.new(c5,   0),  linewidth=1)
+plot(show2  ? rsi15  : na, "15m",  color=color.new(c15,  0),  linewidth=1)
+plot(show3  ? rsi30  : na, "30m",  color=color.new(c30,  15), linewidth=2)
+plot(show4  ? rsi60  : na, "60m",  color=color.new(c60,  10), linewidth=2)
+plot(show5 ? rsi120 : na, "120m", color=color.new(c120, 0),  linewidth=2)
+plot(show6 ? rsi240 : na, "240m", color=color.new(c240, 0),  linewidth=2)
+plot(show7   ? rsiD   : na, "D",    color=color.new(cD,   0),  linewidth=3)
+plot(show8   ? rsiW   : na, "W",    color=color.new(cW,   0),  linewidth=3)
+plot(show9   ? rsiM   : na, "W",    color=color.new(cM,   0),  linewidth=3)
+
+
+
+hline(30,"Oversold Signal Line", linestyle = hline.style_dashed, color = color.green)
+hline(70,"Overbought Signal Line", linestyle = hline.style_dashed, color = color.red)
+hline(50,"Bullish Signal", linestyle = hline.style_dashed, color = color.white)
+
+
+var table wm = table.new(position.bottom_right, 1, 1)
+
+if barstate.islast
+    table.cell(wm, 0, 0, "MTF RSI", text_size=size.huge,
+               text_color=color.new(color.gray, 65),
+               bgcolor=color.new(color.black,100))
+    
+
+
