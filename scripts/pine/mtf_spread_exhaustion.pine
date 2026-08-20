@@ -1,90 +1,258 @@
 //@version=5
-indicator("MTF Spread-Exhaustion Alignment", "SpreadExhaust MTF", overlay=false, max_bars_back=500)
+indicator("MTF Spread-Exhaustion (directional percentile)", "SpreadExhaust Dir", overlay=false, max_bars_back=5000)
 
 // ============================ Inputs ============================
-metricType = input.string("EMA Spread (20-200)", "Exhaustion metric", options=["EMA Spread (20-200)","Price vs EMA200","Price vs EMA20"])
-fastLen  = input.int(20,  "Fast EMA", minval=1, group="Calc")
-slowLen  = input.int(200, "Slow EMA", minval=1, group="Calc")
-prLen    = input.int(200, "Percentile lookback (bars)", minval=20, group="Calc")
-upTh     = input.float(90, "Exhaustion percentile", minval=50, maxval=100, group="Calc")
-alignTh  = input.int(5, "Alert when this many TFs align", minval=1, maxval=8, group="Calc")
-showRibbons = input.bool(true, "Show TF ribbons", group="Display")
-showNet     = input.bool(true, "Show net-lean line", group="Display")
-showTable   = input.bool(true, "Show table",  group="Display")
+l1 = input.int(20,  "EMA fast", minval=1, group="EMAs")
+l2 = input.int(50,  "EMA 2", minval=1, group="EMAs")
+l3 = input.int(100, "EMA 3", minval=1, group="EMAs")
+l4 = input.int(200, "EMA slow (denominator)", minval=1, group="EMAs")
 
-cUp = input.color(color.new(#f23645, 0), "Up-exhaustion (stretched UP / bearish lean)", group="Colors")
-cDn = input.color(color.new(#089981, 0), "Down-exhaustion (stretched DOWN / bullish lean)", group="Colors")
-cNe = color.new(color.gray, 82)
+prLen = input.int(200, "Percentile lookback (bars)", minval=20, group="Calc",
+     tooltip="Lower (~50-100) for trending single stocks; higher (~200-500) for mean-reverting indices.")
+upTh  = input.int(85, "Exhaustion |percentile| for count/alert", minval=50, maxval=100, group="Calc")
+alignN = input.int(4, "Alert when this many TFs at an extreme", minval=1, maxval=8, group="Calc")
+useBandSign = input.bool(true, "Band-based sign (SMA5 vs EMA band +/- ATR)", group="Calc",
+     tooltip="ON = +1 when the smoothed trigger clears the EMA band by atrK*ATR, -1 below it, hold previous sign inside (seeds at +1).  OFF = legacy EMA20 vs EMA200 crossover sign.")
+sigLen = input.int(5,  "  Trigger smoothing (SMA)", minval=1, group="Calc",
+     tooltip="Raw close flips ~2x more than a crossover. Smoothing the trigger is the single biggest whipsaw reduction.")
+atrLen = input.int(14, "  ATR length", minval=1, group="Calc")
+atrK   = input.float(1.0, "  ATR band multiple", minval=0.0, step=0.1, group="Calc",
+     tooltip="Deadband outside the EMA band. Higher = fewer flips, more lag. 0 = trigger against the raw band edge.")
 
-// ======================== Per-TF exhaustion ========================
-// For a timeframe: compute the chosen stretch metric, take its rolling percentile
-// (0..100). +1 = stretched UP beyond upTh; -1 = stretched DOWN beyond (100-upTh).
+
+dmiLen = input.int(8, "ADX / DMI Length")
+rsiLen = input.int(8, "RSI Length")
+DiffInput = input.int(12, "DI Difference Limit")
+adx_floor = input.float(20, "ADX Floor")
+trend_adx = input.float(23, "MTF Trend Min ADX")
+
+
+
+grp = "Timeframes"
+
+en1 = input.bool(true,  "Show TF1", inline="tf1", group=grp)
+tf1 = input.timeframe("5",   "",  inline="tf1", group=grp)
+
+en2 = input.bool(true,  "Show TF2", inline="tf2", group=grp)
+tf2 = input.timeframe("15",  "",  inline="tf2", group=grp)
+
+en3 = input.bool(true,  "Show TF3", inline="tf3", group=grp)
+tf3 = input.timeframe("30",  "",  inline="tf3", group=grp)
+
+en4 = input.bool(true,  "Show TF4", inline="tf4", group=grp)
+tf4 = input.timeframe("60",  "",  inline="tf4", group=grp)
+
+en5 = input.bool(true,  "Show TF5", inline="tf5", group=grp)
+tf5 = input.timeframe("120", "",  inline="tf5", group=grp)
+
+en6 = input.bool(true,  "Show TF6", inline="tf6", group=grp)
+tf6 = input.timeframe("240", "",  inline="tf6", group=grp)
+
+en7 = input.bool(true,  "Show TF7", inline="tf7", group=grp)
+tf7 = input.timeframe("D",   "",  inline="tf7", group=grp)
+
+en8 = input.bool(true,  "Show TF8", inline="tf8", group=grp)
+tf8 = input.timeframe("W",   "",  inline="tf8", group=grp)
+
+en9 = input.bool(true,  "Show TF8", inline="tf9", group=grp)
+tf9 = input.timeframe("M",   "",  inline="tf9", group=grp)
+
+showDist = input.bool(false, "Show Distance Areas", group="Display")
+
+showAgg = input.bool(true, "Show aggregate (mean) line", group="Display")
+showTbl = input.bool(true, "Show table", group="Display")
+
+userange   = input.bool(true, "Range",    inline="t3", group="Timeframes")
+
+
+chartTfSec = timeframe.in_seconds(timeframe.period)
+
+show1 = en1 and chartTfSec <= timeframe.in_seconds(tf1)
+show2 = en2 and chartTfSec <= timeframe.in_seconds(tf2)
+show3 = en3 and chartTfSec <= timeframe.in_seconds(tf3)
+show4 = en4 and chartTfSec <= timeframe.in_seconds(tf4)
+show5 = en5 and chartTfSec <= timeframe.in_seconds(tf5)
+show6 = en6 and chartTfSec <= timeframe.in_seconds(tf6)
+show7 = en7 and chartTfSec <= timeframe.in_seconds(tf7)
+show8 = en8 and chartTfSec <= timeframe.in_seconds(tf8)
+show9 = en9 and chartTfSec <= timeframe.in_seconds(tf9)
+
+
+// ============ Directional fan-spread percentile (-100..+100) ============
+// magnitude = (maxEMA - minEMA) / EMA200 * 100  (stable denominator, always >=0)
+// signedPct = sign * percentile(magnitude)
+// sign: a smoothed trigger (SMA sigLen) clearing the EMA band by atrK*ATR sets it
+// (+1 above / -1 below); inside that deadband the previous sign carries forward. Seed = +1.
+// Raw close against the bare band edge flips ~2x more than the legacy crossover -- the
+// smoothing and the ATR deadband are both needed.
 f_calc() =>
-    ef = ta.ema(close, fastLen)
-    es = ta.ema(close, slowLen)
-    m = metricType == "EMA Spread (20-200)" ? (ef - es) / es * 100 : metricType == "Price vs EMA200" ? (close - es) / es * 100 : (close - ef) / ef * 100
-    pr = ta.percentrank(m, prLen)
-    // exhaustion needs BOTH an extreme percentile AND a matching stretch sign:
-    // red/up only when spread>0, green/down only when spread<0.
-    d = na(pr) ? 0 : (m > 0 and pr >= upTh) ? 1 : (m < 0 and pr <= (100 - upTh)) ? -1 : 0
-    [d, pr]
+    e1 = ta.ema(close, l1)
+    e2 = ta.ema(close, l2)
+    e3 = ta.ema(close, l3)
+    e4 = ta.ema(close, l4)
+    mx = math.max(e1, e2, e3, e4)
+    mn = math.min(e1, e2, e3, e4)
+    fan = (mx - mn) / e4 * 100.0          // ribbon width, % of EMA200
+    magPct = ta.percentrank(fan, prLen)    // 0..100
+    trig = ta.sma(close, sigLen)           // smoothed trigger, not raw close
+    band = ta.atr(atrLen) * atrK           // volatility deadband outside the ribbon
+    var float bandSgn = 1.0                // seed +1 until the trigger first clears the band
+    bandSgn := trig > mx + band ? 1.0 : trig < mn - band ? -1.0 : bandSgn
+    sgn = useBandSign ? bandSgn : (e1 >= e4 ? 1.0 : -1.0)
+    signedPct = sgn * magPct               // -100..+100
+    rsi2_local = ta.ema(ta.rsi(close, rsiLen),8)
+    [p5, m5, adx_local] = ta.dmi(dmiLen, dmiLen)
+    [signedPct, sgn * fan, rsi2_local,adx_local]
 
-[d5,p5]     = request.security(syminfo.tickerid, "5",   f_calc())
-[d15,p15]   = request.security(syminfo.tickerid, "15",  f_calc())
-[d30,p30]   = request.security(syminfo.tickerid, "30",  f_calc())
-[d60,p60]   = request.security(syminfo.tickerid, "60",  f_calc())
-[d120,p120] = request.security(syminfo.tickerid, "120", f_calc())
-[d240,p240] = request.security(syminfo.tickerid, "240", f_calc())
-[dD,pD]     = request.security(syminfo.tickerid, "D",   f_calc())
-[dW,pW]     = request.security(syminfo.tickerid, "W",   f_calc())
 
-netScore = d5 + d15 + d30 + d60 + d120 + d240 + dD + dW
-upCount  = (d5>0?1:0)+(d15>0?1:0)+(d30>0?1:0)+(d60>0?1:0)+(d120>0?1:0)+(d240>0?1:0)+(dD>0?1:0)+(dW>0?1:0)
-dnCount  = (d5<0?1:0)+(d15<0?1:0)+(d30<0?1:0)+(d60<0?1:0)+(d120<0?1:0)+(d240<0?1:0)+(dD<0?1:0)+(dW<0?1:0)
-dom      = math.max(upCount, dnCount)
+[v5,r5,rsi5,adx5]     = request.security(syminfo.tickerid, tf1,   f_calc())
+[v15,r15,rsi15,adx15]   = request.security(syminfo.tickerid, tf2,  f_calc())
+[v30,r30,rsi30,adx30]   = request.security(syminfo.tickerid, tf3,  f_calc())
+[v60,r60,rsi60,adx60]   = request.security(syminfo.tickerid, tf4,  f_calc())
+[v120,r120,rsi120,adx120] = request.security(syminfo.tickerid, tf5, f_calc())
+[v240,r240,rsi240,adx240] = request.security(syminfo.tickerid, tf6, f_calc())
+[vD,rD,rsiD,adxD]     = request.security(syminfo.tickerid, tf7,   f_calc())
+[vW,rW,rsiW,adxW]     = request.security(syminfo.tickerid, tf8,   f_calc())
+[vM,rM,rsiM,adxM]     = request.security(syminfo.tickerid, tf9,   f_calc())
 
-f_col(d) => d > 0 ? cUp : d < 0 ? cDn : cNe
+maxV = math.max(v5,v15,v30,v60,v120,v240,vD,vW)
+minV = math.min(v5,v15,v30,v60,v120,v240,vD,vW)
+rangeV = math.min(200,maxV - minV)-100
 
-// ============================ Ribbons ============================
-// One horizontal ribbon per timeframe (5m at bottom -> W at top).
-plot(showRibbons ? 1 : na, "5m",   color=f_col(d5),   linewidth=8, style=plot.style_linebr)
-plot(showRibbons ? 2 : na, "15m",  color=f_col(d15),  linewidth=8, style=plot.style_linebr)
-plot(showRibbons ? 3 : na, "30m",  color=f_col(d30),  linewidth=8, style=plot.style_linebr)
-plot(showRibbons ? 4 : na, "60m",  color=f_col(d60),  linewidth=8, style=plot.style_linebr)
-plot(showRibbons ? 5 : na, "120m", color=f_col(d120), linewidth=8, style=plot.style_linebr)
-plot(showRibbons ? 6 : na, "240m", color=f_col(d240), linewidth=8, style=plot.style_linebr)
-plot(showRibbons ? 7 : na, "D",    color=f_col(dD),   linewidth=8, style=plot.style_linebr)
-plot(showRibbons ? 8 : na, "W",    color=f_col(dW),   linewidth=8, style=plot.style_linebr)
+dist_v15 = v15 - math.avg(v30,v60,v120,v240,vD,vW)
+dist_v30 = v30 - math.avg(v60,v120,v240,vD,vW)
+dist_v60 = v60 - math.avg(v120,v240,vD,vW)
+dist_v120 = v120 - math.avg(v240,vD,vW)
 
-// Net-lean line mapped into the 0..8 ribbon band (4.5 = neutral, up = more UP-aligned)
-plot(showNet ? (netScore + 8) / 2.0 : na, "Net lean", color=color.new(color.white, 0), linewidth=2)
+// ============================ Colors (shared by lines + table legend) ============================
+c5   = #ffffff   // 5m  — bright white (starker)
+c15  = #00e5ff   // 15m — electric cyan (starker)
+c30  = #26c6da   // 30m
+c60  = #42a5f5   // 60m
+c120 = #ab47bc   // 120m
+c240 = #ffa726   // 240m
+cD   = #ffee58   // D
+cW   = #ef5350   // W
+cM   = #ffffff  // W
+cRange = #faf4f4
 
-// ===================== Coincidence background =====================
-// Background tints toward the dominant side; stronger tint = more TFs coinciding.
-bgc = netScore > 0 ? color.new(cUp, 100 - math.min(dom,8)*7) : netScore < 0 ? color.new(cDn, 100 - math.min(dom,8)*7) : na
-bgcolor(bgc)
-hline(4.5, "neutral", color=color.new(color.gray, 60), linestyle=hline.style_dotted)
+// ============================ Directional lines ============================
+plot(show1   ? v5   : na, "5m",   color=color.new(c5,   0),  linewidth=1)
+plot(show2  ? v15  : na, "15m",  color=color.new(c15,  0),  linewidth=1)
+plot(show3  ? v30  : na, "30m",  color=color.new(c30,  15), linewidth=2)
+plot(show4  ? v60  : na, "60m",  color=color.new(c60,  10), linewidth=2)
+plot(show5 ? v120 : na, "120m", color=color.new(c120, 0),  linewidth=2)
+plot(show6 ? v240 : na, "240m", color=color.new(c240, 0),  linewidth=2)
+plot(show7   ? vD   : na, "D",    color=color.new(cD,   0),  linewidth=3)
+plot(show8   ? vW   : na, "W",    color=color.new(cW,   0),  linewidth=3)
+plot(show9   ? vM   : na, "W",    color=color.new(cM,   0),  linewidth=3)
 
-// ============================= Table =============================
-var table t = table.new(position.top_right, 3, 10, border_width=1, frame_color=color.new(color.gray,40), frame_width=1)
-f_arrow(d) => d > 0 ? "▲ up" : d < 0 ? "▼ dn" : "–"
-if showTable and barstate.islast
-    table.cell(t, 0, 0, "TF",    text_color=color.white, bgcolor=color.new(color.gray,30), text_size=size.small)
-    table.cell(t, 1, 0, "State", text_color=color.white, bgcolor=color.new(color.gray,30), text_size=size.small)
-    table.cell(t, 2, 0, "%ile",  text_color=color.white, bgcolor=color.new(color.gray,30), text_size=size.small)
-    names = array.from("5m","15m","30m","60m","120m","240m","D","W")
-    ds    = array.from(d5,d15,d30,d60,d120,d240,dD,dW)
-    ps    = array.from(p5,p15,p30,p60,p120,p240,pD,pW)
-    for i = 0 to 7
-        di = array.get(ds, i)
-        col = f_col(di)
-        pv = array.get(ps, i)
-        table.cell(t, 0, i+1, array.get(names,i), text_color=color.white, text_size=size.small)
-        table.cell(t, 1, i+1, f_arrow(di), text_color=color.white, bgcolor=color.new(col, di==0?88:25), text_size=size.small)
-        table.cell(t, 2, i+1, na(pv) ? "–" : str.tostring(pv, "#"), text_color=color.white, text_size=size.small)
-    table.cell(t, 0, 9, "NET", text_color=color.white, bgcolor=color.new(color.gray,20), text_size=size.small)
-    table.cell(t, 1, 9, (netScore>0?"+":"") + str.tostring(netScore), text_color=color.white, bgcolor=color.new(netScore>0?cUp:netScore<0?cDn:color.gray, 25), text_size=size.small)
-    table.cell(t, 2, 9, "↑"+str.tostring(upCount)+"  ↓"+str.tostring(dnCount), text_color=color.white, text_size=size.small)
 
-// ============================= Alerts =============================
-alertcondition(ta.crossover(math.abs(netScore), alignTh - 0.5), "TFs aligned", "MTF spread-exhaustion: timeframes aligned")
+plot(en1   ? rsi5   : na, "5m",   color=color.new(c5,   0),  linewidth=1,display = display.status_line)
+plot(en2  ? rsi15  : na, "15m",  color=color.new(c15,  0),  linewidth=1,display = display.status_line)
+plot(en3  ? rsi30  : na, "30m",  color=color.new(c30,  15), linewidth=2,display = display.status_line)
+plot(en4  ? rsi60  : na, "60m",  color=color.new(c60,  10), linewidth=2,display = display.status_line)
+plot(en5 ? rsi120 : na, "120m", color=color.new(c120, 0),  linewidth=2,display = display.status_line)
+plot(en6 ? rsi240 : na, "240m", color=color.new(c240, 0),  linewidth=2,display = display.status_line)
+plot(en7   ? rsiD   : na, "D",    color=color.new(cD,   0),  linewidth=3,display = display.status_line)
+plot(en8   ? rsiW   : na, "W",    color=color.new(cW,   0),  linewidth=3,display = display.status_line)
+
+plot(en1   ? adx5   : na, "5m",   color=color.new(c5,   0),  linewidth=1,display = display.status_line)
+plot(en2  ? adx15  : na, "15m",  color=color.new(c15,  0),  linewidth=1,display = display.status_line)
+plot(en3  ? adx30  : na, "30m",  color=color.new(c30,  15), linewidth=2,display = display.status_line)
+plot(en4  ? adx60  : na, "60m",  color=color.new(c60,  10), linewidth=2,display = display.status_line)
+plot(en5 ? adx120 : na, "120m", color=color.new(c120, 0),  linewidth=2,display = display.status_line)
+plot(en6 ? adx240 : na, "240m", color=color.new(c240, 0),  linewidth=2,display = display.status_line)
+plot(en7   ? adxD   : na, "D",    color=color.new(cD,   0),  linewidth=3,display = display.status_line)
+plot(en8   ? adxW   : na, "W",    color=color.new(cW,   0),  linewidth=3,display = display.status_line)
+
+
+
+
+
+plot(showDist ? dist_v15 : na , "v15 Distance",   color=color.new(color.silver,85), style = plot.style_area,histbase = 0)
+plot(showDist ? dist_v30 : na, "v30 Distance",   color=color.new(color.yellow,90), style = plot.style_area,histbase = 0)
+plot(showDist ? dist_v60 : na, "v60 Distance",   color=color.new(color.blue,93), style = plot.style_area,histbase = 0)
+plot(showDist ? dist_v120 : na , "v120 Distance",   color=color.new(color.red,96), style = plot.style_area,histbase =0)
+
+
+cnt = (en1?1:0)+(en2?1:0)+(en3?1:0)+(en4?1:0)+(en5?1:0)+(en6?1:0)+(en7?1:0)+(en8?1:0)
+sumV = (en1?nz(v5):0)+(en2?nz(v15):0)+(en3?nz(v30):0)+(en4?nz(v60):0)+(en5?nz(v120):0)+(en6?nz(v240):0)+(en7?nz(vD):0)+(en8?nz(vW):0)
+aggV = cnt > 0 ? sumV / cnt : na
+//plot(showAgg ? aggV : na, "Aggregate", color=color.new(color.white, 0), linewidth=2, style=plot.style_stepline)
+
+// ============================ Zones ============================
+hUp   = hline(85,  "up-exhaustion",   color=color.new(#ef5350, 40), linestyle=hline.style_dashed)
+hTop  = hline(100, "", color=color.new(color.gray, 100))
+hDn   = hline(-85, "down-exhaustion", color=color.new(#26a69a, 40), linestyle=hline.style_dashed)
+hBot  = hline(-100,"", color=color.new(color.gray, 100))
+hline(0, "compressed / trendless", color=color.new(color.gray, 60), linestyle=hline.style_dashed, linewidth = 2)
+fill(hUp, hTop, color=color.new(#ef5350, 90))
+fill(hDn, hBot, color=color.new(#26a69a, 90))
+
+f_up(u,v) => u and not na(v) and v >=  upTh ? 1 : 0
+f_dn(u,v) => u and not na(v) and v <= -upTh ? 1 : 0
+upCount = f_up(en1,v5)+f_up(en2,v15)+f_up(en3,v30)+f_up(en4,v60)+f_up(en5,v120)+f_up(en6,v240)+f_up(en7,vD)+f_up(en8,vW)
+dnCount = f_dn(en1,v5)+f_dn(en2,v15)+f_dn(en3,v30)+f_dn(en4,v60)+f_dn(en5,v120)+f_dn(en6,v240)+f_dn(en7,vD)+f_dn(en8,vW)
+
+// ============================ Table (+ color legend) ============================
+// Col 0 = color swatch (matches each line), col 1 = TF name, col 2 = value.
+// var table t = table.new(position.bottom_right, 3, 10, border_width=1, frame_color=color.new(color.gray,40), frame_width=2)
+// f_cell(u, v, r) => u ? (na(v) ? "–" : str.tostring(v, "+#;-#") + "   (" + str.tostring(r, "+#.#;-#.#") + "%)") : "off"
+// f_tcol(v) => na(v) ? color.new(color.gray,80) : v >= upTh ? color.new(#ef5350,25) : v <= -upTh ? color.new(#26a69a,25) : color.new(color.gray,70)
+// if showTbl and barstate.islast
+//     table.cell(t, 0, 0, "",            width=1, height=3, bgcolor=color.new(color.gray,25), text_size=size.tiny)
+//     table.cell(t, 1, 0, "TF",          width=3, height=3, text_color=color.white, bgcolor=color.new(color.gray,25), text_size=size.tiny)
+//     table.cell(t, 2, 0, "dirPct (w%)", height=2, text_color=color.white, bgcolor=color.new(color.gray,25), text_size=size.tiny)
+//     us = array.from(en1,en2,en3,en4,en5,en6,en7,en8)
+//     nm = array.from("5m","15m","30m","60m","120m","240m","D","W")
+//     vs = array.from(v5,v15,v30,v60,v120,v240,vD,vW)
+//     rs = array.from(r5,r15,r30,r60,r120,r240,rD,rW)
+//     cl = array.from(c5,c15,c30,c60,c120,c240,cD,cW)
+//     for i = 0 to 7
+//         on = array.get(us,i)
+//         table.cell(t, 0, i+1, "", width=1, height=3, bgcolor=on ? array.get(cl,i) : color.new(color.gray,80))
+//         table.cell(t, 1, i+1, array.get(nm,i), width=3, height=3, text_color=color.white, text_size=size.tiny)
+//         table.cell(t, 2, i+1, f_cell(on, array.get(vs,i), array.get(rs,i)), height=2, text_color=color.white, bgcolor=f_tcol(array.get(vs,i)), text_size=size.tiny)
+//     table.cell(t, 0, 9, "", width=1, height=2, bgcolor=color.new(color.gray,20))
+//     table.cell(t, 1, 9, "EXT", width=3, height=2, text_color=color.white, bgcolor=color.new(color.gray,20), text_size=size.tiny)
+//     table.cell(t, 2, 9, "▲up "+str.tostring(upCount)+"  ▼dn "+str.tostring(dnCount), height=2, text_color=color.white, text_size=size.tiny)
+
+
+
+
+// // === Average Absolute Deviation from Mean ===
+// f_avgDist(v5, v15, v30, v60, v120, v240, vD, vW) =>
+//     n     = 8
+//     mean  = (v5 + v15 + v30 + v60 + v120 + v240 + vD + vW) / n
+//     sumAD = math.abs(v5 - mean) + math.abs(v15 - mean) + math.abs(v30 - mean) +
+//              math.abs(v60 - mean) + math.abs(v120 - mean) + math.abs(v240 - mean) +
+//              math.abs(vD - mean) + math.abs(vW - mean)
+//     sumAD / n
+// avgDistMean     = f_avgDist(v5, v15, v30, v60, v120, v240, vD, vW)
+// // === Plots ===
+// plot(avgDistMean,     title="Avg Dist (Mean-based)",     color=color.new(color.orange, 0), linewidth=2)
+// //plot(avgDistPairwise, title="Avg Dist (Pairwise)",        color=color.new(color.blue, 0),   linewidth=2)
+
+
+var table wm = table.new(position.top_right, 1, 1)
+
+if barstate.islast
+    table.cell(wm, 0, 0, "MTF Spread", text_size=size.huge,
+               text_color=color.new(color.gray, 65),
+               bgcolor=color.new(color.black,100))
+
+
+
+
+cond = (v5>0 and v5<40)
+
+//(vD < 1 and vD>-2) and (vW>-1 and vW<1) 
+//and (v240>0 and v240<30) and (v120>77) and (v60>85) and (v30>80 and v30<90))
+var int totalCount = 0
+if cond
+    totalCount += 1
+bgcolor(cond ? color.new(color.yellow,80 ) : na)
+if barstate.islast
+    label.new(bar_index, 0, "Matches (5000 bars): " + str.tostring(totalCount), style=label.style_label_down, color=color.orange)
+
