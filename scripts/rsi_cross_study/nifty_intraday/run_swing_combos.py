@@ -3,6 +3,10 @@ Combos: (fast=15m, mid=1h, slow=D) and (fast=1h, mid=D, slow=W).
 Signal = fast crosses above mid, gated by slow rsi2>50 (bullish HTF state).
 Held for days -- event-bounded MFE/MAE (next-signal-or-365d-cap), same
 methodology as the stock study.
+
+BUG FIX (2026-08-21): MFE/MAE now measured from bar HIGH/LOW, not CLOSE --
+close-only path.max()/min() missed intrabar extremes. Same fix as Track B,
+see run_intraday_combos.py for the concrete example that caught this.
 """
 import os
 import numpy as np
@@ -24,6 +28,8 @@ for name, fast_tf, mid_tf, slow_tf in COMBOS:
     print(f"\n{'='*70}\nCOMBO {name}: fast={fast_tf} mid={mid_tf} slow={slow_tf}\n{'='*70}")
     d = build_signal(df1m, fast_tf, mid_tf, slow_tf)
     close = d["close"].to_numpy(dtype=float)
+    high = d["high"].to_numpy(dtype=float)
+    low = d["low"].to_numpy(dtype=float)
     dates = d["timestamp"].to_numpy()
     n = len(d)
     print(f"joined rows: {n}  raw cross_up: {d['cross_up'].sum()}  gated signal_raw: {d['signal_raw'].sum()}")
@@ -55,9 +61,8 @@ for name, fast_tf, mid_tf, slow_tf in COMBOS:
         j = min(cap_idx[i], next_i - 1, n - 1)
         if j <= i:
             continue
-        path = close[i : j + 1]
-        mfe[i] = path.max() / close[i] - 1.0
-        mae[i] = path.min() / close[i] - 1.0
+        mfe[i] = high[i : j + 1].max() / close[i] - 1.0
+        mae[i] = low[i : j + 1].min() / close[i] - 1.0
         final_ret[i] = close[j] / close[i] - 1.0
         window_days[i] = (dates[j] - dates[i]) / np.timedelta64(1, "D")
     d["mfe"] = mfe; d["mae"] = mae; d["final_ret"] = final_ret; d["window_days"] = window_days
