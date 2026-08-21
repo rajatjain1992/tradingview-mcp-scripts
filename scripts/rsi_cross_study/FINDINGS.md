@@ -1,8 +1,52 @@
 # Daily RSI × Weekly RSI crossover study — findings (2026-08-21)
 
-Batch 1 of the market-cap-ranked universe (top 50 stocks by mcap, from
-`scripts/mtf_classifier/full_universe_batches.csv`), 2005-2026 daily data from
-`rajat-trade.stock_data_set.stock_daily_prices_dhan`.
+Full market-cap-ranked universe (all 17 batches, 816 listed / 770 with enough
+history, from `scripts/mtf_classifier/full_universe_batches.csv`), 2005-2026
+daily data from `rajat-trade.stock_data_set.stock_daily_prices_dhan`.
+**62,710 independent signals.** Rerun via `analyze_all.py` on the combined
+`events_all.parquet` any time more batches are added.
+
+## FULL-UNIVERSE UPDATE (2026-08-21) — Rajat pushed back on the batch-1-only
+## read; here's what survived scale and what didn't.
+
+**Survived:** the MFE-bucket "why" (rate of ascent + weekly ADX rising into
+the top bucket) holds at 12x the sample size — see the updated table in
+"MFE percentile buckets" below.
+
+**Did NOT survive — corrected:**
+- ~~"Weekly RSI 20-30 is the standout bucket"~~ was a batch-1 artifact. At
+  full scale it's a **U-shape**: both extremes (weekly RSI 0-20 AND 60+) beat
+  the middle (30-50), which is now the *weakest* zone. Checked this isn't a
+  small-cap contamination effect by restricting to just batches 1-6 (top 300
+  by market cap) — the U-shape holds there too:
+
+  | Weekly RSI at cross | win% (365d, top-300 only) | mean |
+  |---|---|---|
+  | 0-20 | 77.5% | +66.5% |
+  | 20-30 | 68.5% | +49.0% |
+  | 30-40 | 60.3% | +31.1% |
+  | 40-50 (weakest) | 59.7% | +22.8% |
+  | 50-60 | 64.4% | +25.0% |
+  | 60+ | 67.9% | +30.0% |
+
+  Full-universe numbers (n in the thousands per bucket, not batch-1's low
+  hundreds): 0-20 n=266/69.3% win/+68.6% mean; 20-30 n=3,204/62.7%/+42.9%;
+  30-40 n=11,940/53.8%/+25.4%; 40-50 n=19,569/55.8%/+23.5%; 50-60
+  n=16,323/61.3%/+29.1%; 60+ n=11,408/65.5%/+35.4% (all at 365d).
+
+- ~~"Weekly ADX<15 = more consistent (lower dispersion)"~~ **reversed
+  completely.** At batch-1's n=171 it looked like the best risk-adjusted
+  bucket. At full scale (n=2,241) it's the **weakest** ADX bucket on every
+  metric (57.6% win, +24.7% mean @365d) — ADX 30+ now wins cleanly (n=28,358,
+  61.2% win, +31.8% mean). The batch-1 result was small-sample noise, not
+  signal. Lesson: don't trust a bucket-level finding off n<200 without a
+  scale check.
+
+**Revised bottom line**: the setup works best either at genuine extremes
+(very oversold weekly RSI catching a turn, OR an already-strong weekly RSI
+60+ riding established momentum) — the ambiguous middle (RSI 30-50) is where
+this signal is weakest. Elevated weekly ADX (30+) at entry is a real
+positive, not "quiet market = safer" as batch-1 suggested.
 
 ## Methodology
 
@@ -36,7 +80,10 @@ Essentially identical — the crossover alone is too common (~once every 5
 weeks/stock) to be selective. **The edge only shows up once you condition on
 the level of the weekly RSI / ADX at the moment of the cross.**
 
-## RSI-level segmentation (1yr fwd return)
+## RSI-level segmentation (1yr fwd return) — BATCH 1 ONLY, SUPERSEDED, kept for history
+
+See "FULL-UNIVERSE UPDATE" above for the corrected read (U-shape, not a
+single standout bucket).
 
 | Weekly RSI at cross | n | win% | mean | median |
 |---|---|---|---|---|
@@ -50,7 +97,10 @@ the level of the weekly RSI / ADX at the moment of the cross.**
 20-30 is the one bucket that clears baseline meaningfully on both win-rate and
 magnitude (nearly 2x baseline mean). Everything else is baseline-level.
 
-## ADX-level segmentation
+## ADX-level segmentation — BATCH 1 ONLY, SUPERSEDED, kept for history
+
+See "FULL-UNIVERSE UPDATE" above — the ADX<15 "consistency" claim below
+reversed completely at scale.
 
 Daily ADX at the cross barely differentiates outcomes (all buckets land near
 baseline). **Weekly ADX <15** is a different, complementary finding: win rate
@@ -71,7 +121,25 @@ stop gets hit on 64% of trades, and of those, 65% would have recovered to
 profit if held. This is a slow, choppy setup by nature (buying into weakness),
 not a clean breakout — a tight intraday-style stop actively fights it.
 
-## Step 1+2: MFE percentile buckets (n=5301, this batch)
+## MFE percentile buckets — FULL UNIVERSE (n=62,688, all 17 batches)
+
+Confirmed version of the batch-1 table below, at 12x scale:
+
+| bucket | MFE range | n | avg MAE | avg final_ret | win%(final>0) | rate (MFE/30d) | avg wk_rsi | avg wk_adx |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 0.0% .. 0.5% | 12,538 | -13.9% | -10.0% | 1.8% | 0.1% | 48.6 | 28.7 |
+| 3 | 2.0% .. 3.8% | 6,268 | -11.0% | -6.5% | 26.3% | 2.9% | 50.0 | 29.4 |
+| 5 | 6.3% .. 9.4% | 6,269 | -9.4% | -2.8% | 48.7% | 5.4% | 49.4 | 30.9 |
+| 7 | 13.7% .. 20.1% | 6,269 | -6.9% | +5.0% | 73.3% | 8.3% | 47.4 | 32.2 |
+| 8 | 20.1% .. 32.4% | 6,269 | -5.8% | +12.5% | 83.0% | 10.8% | 47.1 | 33.4 |
+| **9** | **32.4% .. 31154%** | **6,269** | **-4.3%** | **+49.9%** | **93.0%** | **19.0%** | **46.8** | **34.6** |
+
+Top-3-bucket set: 18,807 events, 766 of 770 symbols. Rate of ascent (MFE
+normalized to a per-30-day pace) climbs ~190x from bucket 1 to bucket 9 — the
+top bucket isn't just "given more time," it moves genuinely faster. Full list
+saved to `top_mfe_events_all.csv`.
+
+## Step 1+2: MFE percentile buckets — BATCH 1 ONLY, SUPERSEDED, kept for history
 
 Every event bucketed by its own MFE (best favorable move reached within its
 event-bounded window):
@@ -148,10 +216,14 @@ going in.
 
 ## Open items for next pass
 
-- Scale to the remaining ~16 batches (770 more stocks) with the same
-  event-bounded MFE/MAE methodology.
-- Test a "basing" pre-filter (motivated by the INFY counterexample) before
-  scaling further.
-- Weekly-RSI-20-30 and Weekly-ADX<15 are confirmed non-overlapping — worth
-  tracking as two separate signal flavors across the full universe rather
-  than trying to combine them.
+- ~~Scale to the remaining ~16 batches~~ DONE (2026-08-21) — full 770-symbol
+  universe now in `events_all.parquet`, 62,710 signals, full OHLC captured at
+  every checkpoint from 1W to 365d (not just % returns) per Rajat's request.
+- In progress: chart-reviewing the top 100 bucket-9 signals since 2022 (chart
+  history before ~2022 isn't visually reachable via this TV integration, see
+  the tooling note above) — see `bucket9_chart_review.csv` for
+  progress/comments.
+- Test a "basing" pre-filter (motivated by the INFY counterexample) once the
+  100-signal chart review is further along — see if the U-shape's low-RSI
+  side and high-RSI side both show the same "base first" pattern, or if
+  they're qualitatively different setups.

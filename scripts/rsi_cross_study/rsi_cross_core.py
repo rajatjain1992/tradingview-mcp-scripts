@@ -22,8 +22,10 @@ from mtf_indicators import mtf_rsi_adx_calc, resample_weekly
 RSI_LEN = 8
 DMI_LEN = 8
 # Calendar-day horizons (not trading-day counts) -- "30d later" = first available
-# close on/after event_date + 30 calendar days, so weekends/holidays don't skew it.
-FWD_HORIZONS = {"1w": 7, "2w": 14, "30d": 30, "60d": 60, "90d": 90, "180d": 180, "1y": 365}
+# bar on/after event_date + 30 calendar days, so weekends/holidays don't skew it.
+# Rajat's requested checkpoint set (2026-08-21): 1W,2W,30,60,90,120,180,270,365d.
+FWD_HORIZONS = {"1w": 7, "2w": 14, "30d": 30, "60d": 60, "90d": 90,
+                 "120d": 120, "180d": 180, "270d": 270, "365d": 365}
 MIN_DAILY_BARS = 300  # ~1.5yr, need enough weeks for weekly rsi2 (RSI8+EMA8) to mature + buffer
 MFE_MAE_CAP_DAYS = 365  # hard ceiling on an event's own window if no new signal fires first
 MIN_GAP_DAYS = 10  # collapse whipsaw re-triggers within this many days into one independent signal
@@ -64,13 +66,26 @@ def compute_symbol(daily: pd.DataFrame, rsi_len: int = RSI_LEN, dmi_len: int = D
 
     n = len(d)
     dates = d["timestamp"].to_numpy()
+    open_ = d["open"].to_numpy(dtype=float)
+    high_ = d["high"].to_numpy(dtype=float)
+    low_ = d["low"].to_numpy(dtype=float)
     for label, days in FWD_HORIZONS.items():
         target = dates + np.timedelta64(days, "D")
         idx = np.searchsorted(dates, target, side="left")  # first bar with date >= target
-        fwd = np.full(n, np.nan)
         valid = idx < n
+        fwd = np.full(n, np.nan)
         fwd[valid] = close[idx[valid]] / close[valid] - 1.0
         d[f"fwd_{label}"] = fwd
+        # Raw OHLC of that forward bar too (not just the % return), per Rajat's
+        # request -- lets any later re-analysis recompute whatever it needs
+        # without re-hitting BigQuery.
+        for col_label, arr in [("o", open_), ("h", high_), ("l", low_), ("c", close)]:
+            out = np.full(n, np.nan)
+            out[valid] = arr[idx[valid]]
+            d[f"{col_label}_{label}"] = out
+        fdate = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
+        fdate[valid] = dates[idx[valid]]
+        d[f"date_{label}"] = fdate
 
     # Independent signal = first cross_up in a cluster, collapsing re-triggers
     # within MIN_GAP_DAYS of the prior kept signal (whipsaw around the weekly
@@ -124,12 +139,20 @@ def compute_symbol(daily: pd.DataFrame, rsi_len: int = RSI_LEN, dmi_len: int = D
 
 def extract_events(d: pd.DataFrame, symbol: str) -> pd.DataFrame:
     """Pull the independent-signal rows (already whipsaw-deduped inside
-    compute_symbol, see 'signal' column) into an events table, symbol tagged."""
+    compute_symbol, see 'signal' column) into an events table, symbol tagged.
+    Full raw signal data: entry OHLC, indicator state, MFE/MAE, and both the
+    % return AND the raw OHLC at every FWD_HORIZONS checkpoint (1W..365d)."""
     ev = d[d["signal"]].copy()
     ev.insert(0, "symbol", symbol)
-    cols = (["symbol", "timestamp", "close", "daily_rsi", "weekly_rsi", "daily_adx", "weekly_adx",
-             "mfe", "mae", "final_ret", "window_days"]
-            + [f"fwd_{k}" for k in FWD_HORIZONS])
+    ev = ev.rename(columns={"open": "entry_open", "high": "entry_high", "low": "entry_low", "close": "entry_close"})
+    horizon_cols = []
+    for k in FWD_HORIZONS:
+        horizon_cols += [f"fwd_{k}", f"o_{k}", f"h_{k}", f"l_{k}", f"c_{k}", f"date_{k}"]
+    ev["comment"] = ""
+    cols = (["symbol", "timestamp", "entry_open", "entry_high", "entry_low", "entry_close",
+             "daily_rsi", "weekly_rsi", "daily_adx", "weekly_adx",
+             "mfe", "mae", "final_ret", "window_days", "comment"]
+            + horizon_cols)
     return ev[cols]
 
 
